@@ -28,6 +28,8 @@ class OptimizerClass:
         Initializer for all class variables and intial
         """
 
+        assert method in ['GreatDeluge', 'JustRun']
+
         if verbose:
             print('Initializing optimization configuration')
 
@@ -50,7 +52,11 @@ class OptimizerClass:
             pass
 
         if data_dir is None:
-            data_dir = 'Optimizations/ms_{}-ff_{}-seed_{}/'.format(self.mask_size, str(self.fill_frac).split('.')[1], self.seed)
+            if self.method == 'GreatDeluge':
+                data_dir = 'Optimizations/GD_ms_{}-ff_{}-seed_{}/'.format(self.mask_size, str(self.fill_frac).split('.')[1], self.seed)
+            elif self.method == 'JustRun':
+                data_dir = 'Optimizations/JR_ms_{}-ff_{}-seed_{}/'.format(self.mask_size, str(self.fill_frac).split('.')[1], self.seed)
+
             try:
                 os.mkdir(data_dir)
                 if self.verbose:
@@ -172,11 +178,9 @@ class OptimizerClass:
             self.GreatDeluge()
         elif self.method == 'JustRun':
             self.JustRun()
-        else:
-            print('{} is not a defined optimization method!'.format(self.method))
-
 
     def GreatDeluge(self):
+        start_time = time.time()
         if self.cont:
             pass
         else:
@@ -231,12 +235,18 @@ class OptimizerClass:
                         temp_data[key] = data[key][:-1]
                         data[key] = [data[key][-1]]
                     np.save(self.data_dir+'data_{}-{}.npy'.format(self.save_ev*saves, self.save_ev*(saves+1)-1), temp_data)
+                    print('Completed {} iterations! Creating a save point now'.format(self.save_ev*(saves+1)))
                     saves += 1
                     del temp_data
 
             np.savetxt(self.data_dir+'final_mask.txt', self.min_mask, fmt='%i')
             self.VisualizeMask(self.min_mask, 'Final')
             np.save(self.data_dir+'data_{}-{}.npy'.format(self.save_ev*saves, itr), data)
+
+            end_time = time.time()
+            tt = end_time - start_time
+            print('It took {} minutes and {} seconds to run {} iterations'.format(tt//60, round(tt%60, 2), itr))
+            print('Combining all save points into a singular file now')
 
             final_data, files_list = {}, []
             for f in os.listdir(self.data_dir):
@@ -307,5 +317,3 @@ if __name__ == '__main__':
     optimizer = OptimizerClass(**arg_dict)
 
     optimizer.Optimize()
-
-    # try:
