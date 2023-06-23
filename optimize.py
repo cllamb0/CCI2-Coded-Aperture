@@ -50,7 +50,7 @@ class OptimizerClass:
             pass
 
         if data_dir is None:
-            data_dir = 'Optimizations/mask_size_{}-ff_{}-seed_{}/'.format(self.mask_size, str(self.fill_frac).split('.')[1], self.seed)
+            data_dir = 'Optimizations/ms_{}-ff_{}-seed_{}/'.format(self.mask_size, str(self.fill_frac).split('.')[1], self.seed)
             try:
                 os.mkdir(data_dir)
                 if self.verbose:
