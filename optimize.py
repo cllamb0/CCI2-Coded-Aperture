@@ -7,23 +7,26 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import RegularPolygon
 from matplotlib.collections import PatchCollection
 import math
+import scipy.signal as signal
 
 class OptimizerClass:
     def __init__(self,
-                 method     = 'GreatDeluge',
-                 stopItr    = 500,
-                 data_fname = None,
-                 data_dir   = None,
-                 plots_dir  = None,
-                 decay_rate = 0.025,
-                 cont       = False,
-                 cont_file  = None,
-                 seed       = int(time.time()),
-                 save_ev    = 2500,
-                 mask_size  = 64,
-                 fill_frac  = 0.5,
-                 mask       = None,
-                 verbose    = False):
+                 method        = 'GreatDeluge',
+                 stopItr       = 500,
+                 data_fname    = None,
+                 data_dir      = None,
+                 plots_dir     = None,
+                 decay_rate    = 0.025,
+                 cont          = False,
+                 cont_file     = None,
+                 seed          = int(time.time()),
+                 save_ev       = 1000,
+                 mask_size     = 64,
+                 detector_size = 37,
+                 magnification = 2,
+                 fill_frac     = 0.5,
+                 mask          = None,
+                 verbose       = False):
         """
         Initializer for all class variables and intial
         """
@@ -42,6 +45,9 @@ class OptimizerClass:
         self.seed = seed
         self.save_ev = save_ev
         self.mask_size = mask_size
+        self.detector_size = detector_size
+        self.magnification = magnification
+        self.sample_size = math.floor(self.detector_size/self.magnification)
         self.fill_frac = fill_frac
         self.mask = mask
         self.verbose = verbose
@@ -53,9 +59,9 @@ class OptimizerClass:
 
         if data_dir is None:
             if self.method == 'GreatDeluge':
-                data_dir = 'Optimizations/GD_ms_{}-ff_{}-seed_{}/'.format(self.mask_size, str(self.fill_frac).split('.')[1], self.seed)
+                data_dir = 'Optimizations/GD_ms_{}-ff_{}-mag_{}-seed_{}/'.format(self.mask_size, str(self.fill_frac).split('.')[1], self.magnification, self.seed)
             elif self.method == 'JustRun':
-                data_dir = 'Optimizations/JR_ms_{}-ff_{}-seed_{}/'.format(self.mask_size, str(self.fill_frac).split('.')[1], self.seed)
+                data_dir = 'Optimizations/JR_ms_{}-ff_{}-mag_{}-seed_{}/'.format(self.mask_size, str(self.fill_frac).split('.')[1], self.magnification, self.seed)
 
             try:
                 os.mkdir(data_dir)
@@ -85,6 +91,7 @@ class OptimizerClass:
             self.LoadRandomState()
         else:
             self.CreateMask()
+            self.corr_size = signal.correlate2d(self.mask, self.mask[0:self.sample_size, 0:self.sample_size], mode='valid').shape[0]
             self.init_mask = self.mask.copy()
             self.VisualizeMask(self.init_mask, 'Initial')
 
@@ -92,10 +99,12 @@ class OptimizerClass:
         """
         Creation of the first mask for the "optimization" process
         """
-        mask = np.zeros(self.mask_size**2)
+        mask = np.ones(self.mask_size**2)
         num_fill = math.ceil(self.fill_frac * (self.mask_size**2))
 
-        mask[np.random.choice(mask.size, num_fill, replace=False)] = 1
+        mask[np.random.choice(mask.size, num_fill, replace=False)] = 0
+
+        mask = mask.reshape(self.mask_size, self.mask_size)
 
         np.savetxt(self.data_dir+'Initial_mask.txt', mask, fmt='%i')
 
@@ -118,12 +127,17 @@ class OptimizerClass:
         for m, row in enumerate(plot_mask):
             for n, col in enumerate(row):
                 square = RegularPolygon((n, -m), numVertices=4, radius=0.67,
-                                    orientation=np.radians(45), edgecolor='k', linewidth=0.75, facecolor='white')
+                                    orientation=np.radians(45), edgecolor='white', linewidth=0.75, facecolor='white')
                 patches.append(square)
 
         collection = PatchCollection(patches, match_original=True, cmap=cmap)
         collection.set_array(np.ma.masked_where(plot_mask.flatten() <= 0, plot_mask.flatten()))
         ax.add_collection(collection)
+
+        plt.plot(np.arange(self.mask_size+1)-0.5, np.ones(self.mask_size+1)*0.5, color='black')
+        plt.plot(np.arange(self.mask_size+1)-0.5, -np.ones(self.mask_size+1)*(self.mask_size-0.5), color='black')
+        plt.plot(np.ones(self.mask_size+1)-1.5, -np.arange(self.mask_size+1)+0.5, color='black')
+        plt.plot(np.ones(self.mask_size+1)+self.mask_size-1.5, -np.arange(self.mask_size+1)+0.5, color='black')
 
         ax.set_aspect('equal')
         ax.autoscale_view()
@@ -171,7 +185,13 @@ class OptimizerClass:
 
     def CalculateMetric(self):
         ### IMPLEMENT METRIC CALCULATOR
-        return 1
+        F_matrix = np.array([(signal.correlate2d(self.mask, self.mask[m:m+self.sample_size, n:n+self.sample_size], mode='valid')/(self.corr_size**2)).reshape(self.corr_size**2, ) for m in range(0, self.mask_size-self.sample_size+1) for n in range(0, self.mask_size-self.sample_size+1)])
+        Q1 = (1/self.sample_size)*np.sum((np.diag(F_matrix)-self.fill_frac)**4)
+        np.fill_diagonal(F_matrix, self.fill_frac**2)
+        Q2 = (1/(self.sample_size**2-self.sample_size))*np.sum((F_matrix-self.fill_frac**2)**4)
+        Q = Q1 + Q2
+
+        return Q
 
     def Optimize(self):
         if self.method == 'GreatDeluge':
@@ -184,13 +204,13 @@ class OptimizerClass:
         if self.cont:
             pass
         else:
-            Q_metric = self.CalculateMetric()
+            Q_init_metric = self.CalculateMetric()
             min_metric, water_level = 1, 1
             itr, stop_i = 0, 0
             saves = 0
 
             data = {}
-            data['Metrics'] = [Q_metric]
+            data['Metrics'] = [1]
             data['Water Levels'] = [water_level]
             data['Iterations'] = [itr]
             data['Stopping Iterations'] = [stop_i]
@@ -202,29 +222,32 @@ class OptimizerClass:
             while (stop_i < self.stopItr):
                 itr += 1
 
+                self.mask = self.mask.reshape(self.mask_size**2, )
                 rand_pop   = np.random.choice(np.where(self.mask > 0)[0]) # Random populated position
                 rand_empty = np.random.choice(np.where(self.mask < 1)[0]) # Random empty position
                 self.mask[rand_pop] = 0
                 self.mask[rand_empty] = 1
+                self.mask = self.mask.reshape(self.mask_size, self.mask_size)
 
+                new_metric = self.CalculateMetric()/Q_init_metric
 
-                Q_metric = self.CalculateMetric()
-
-                if Q_metric < water_level:
+                if new_metric < water_level:
+                    print('\033[32mImprovement on itr: {}\033[0m'.format(itr))
                     stop_i = 0
                     self.last_imp_mask = self.mask.copy()
 
-                    water_level -= self.decay_rate * (water_level - Q_metric)
+                    water_level -= self.decay_rate * (water_level - new_metric)
 
-                    if Q_metric < min_metric:
-                        min_metric = Q_metric
+                    if new_metric < min_metric:
+                        min_metric = new_metric
                         self.min_mask = self.mask.copy()
 
                 else:
+                    print('\033[31mNo improvement on itr: {}\033[0m'.format(itr))
                     stop_i += 1
                     self.mask = self.last_imp_mask.copy()
 
-                data['Metrics'].append(Q_metric)
+                data['Metrics'].append(new_metric)
                 data['Water Levels'].append(water_level)
                 data['Iterations'].append(itr)
                 data['Stopping Iterations'].append(stop_i)
@@ -310,6 +333,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '--cont', action='store_true', default=False,
         help=('User set method of continuation'))
+    parser.add_argument(
+        '--magnification', type=float, default=2,
+        help=('Mask magnification'))
 
     args = parser.parse_args()
     arg_dict = vars(args)
