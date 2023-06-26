@@ -151,6 +151,20 @@ class OptimizerClass:
 
         print('Saved {} aperture mask image'.format(sname))
 
+    def VisualizeWaterLevel(self):
+        final_data = np.load(self.data_dir+'final_data.npy', allow_pickle=True).item()
+
+        plt.figure(dpi=400, facecolor='white')
+
+        plt.plot(final_data['Iterations'], final_data['Metrics'], label='Metrics', alpha=0.5, color='grey')
+        plt.plot(final_data['Iterations'], final_data['Water Levels'], label='Water Level', color='black')
+        plt.legend()
+        plt.xlabel('# Iterations')
+        plt.savefig(self.plots_dir+'Water_Level_Evolution.png', bbox_inches='tight')
+        plt.close()
+
+        print('Saved the final water level evolution plot')
+
     def SaveRandomState(self):
         """
         Saves the current random state to files to be loaded later upon continuation
@@ -285,6 +299,8 @@ class OptimizerClass:
             del files_list
 
             np.save(self.data_dir+'final_data.npy', final_data)
+
+            self.VisualizeWaterLevel()
 
 
         except KeyboardInterrupt:
