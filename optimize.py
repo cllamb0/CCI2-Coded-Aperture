@@ -257,9 +257,10 @@ class OptimizerClass:
                         self.min_mask = self.mask.copy()
 
                 else:
-                    print('\033[31mNo improvement on itr: {}\033[0m'.format(itr))
                     stop_i += 1
+                    print('\033[31mNo improvement on itr: {}\nIt has been {} iterations with no improvement\033[0m'.format(itr, stop_i))
                     self.mask = self.last_imp_mask.copy()
+                print('----------------------------------')
 
                 data['Metrics'].append(new_metric)
                 data['Water Levels'].append(water_level)
