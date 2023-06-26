@@ -310,9 +310,9 @@ class OptimizerClass:
             print('--------------------------------')
 
             self.SaveRandomState()
-            np.savetxt(self.data_dir+'INCOMPLETE_mask.txt', self.mask)
-            np.savetxt(self.data_dir+'INCOMPLETE_min_mask.txt', self.min_mask)
-            np.savetxt(self.data_dir+'INCOMPLETE_last_imp_mask.txt', self.last_imp_mask)
+            np.savetxt(self.data_dir+'INCOMPLETE_mask.txt', self.mask, fmt='%i')
+            np.savetxt(self.data_dir+'INCOMPLETE_min_mask.txt', self.min_mask, fmt='%i')
+            np.savetxt(self.data_dir+'INCOMPLETE_last_imp_mask.txt', self.last_imp_mask, fmt='%i')
 
             np.save(self.data_dir+'INCOMPLETE_data.npy', data)
 
