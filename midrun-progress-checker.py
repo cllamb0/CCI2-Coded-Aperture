@@ -12,7 +12,7 @@ dir = sys.argv[1]
 final_data, files_list = {}, []
 data_dir = 'Optimizations/{}/'.format(dir)
 for f in os.listdir(data_dir):
-    if f.endswith('.npy') and not f.endswith('data.npy'):
+    if f.endswith('.npy') and f.startswith('data_'):
         files_list.append([int(f.split('_')[1].split('-')[0]), f])
 files_list.sort()
 
