@@ -18,7 +18,6 @@ class OptimizerClass:
                  plots_dir     = None,
                  decay_rate    = 0.025,
                  cont          = False,
-                 cont_file     = None,
                  seed          = int(time.time()),
                  save_ev       = 1000,
                  mask_size     = 64,
@@ -41,7 +40,6 @@ class OptimizerClass:
         self.data_fname = data_fname
         self.decay_rate = decay_rate
         self.cont = cont
-        self.cont_file = cont_file
         self.seed = seed
         self.save_ev = save_ev
         self.mask_size = mask_size
@@ -81,19 +79,30 @@ class OptimizerClass:
                 pass
             self.plots_dir = plots_dir
 
-        # with os.listdir(self.data_dir) as files:
-
+        self.cont = len([f for f in os.listdir(self.data_dir) if f.startswith('INCOMPLETE')]) != 0
 
         np.random.seed(self.seed)
         if self.cont:
-            if self.verbose:
-                print('Continuing from previous optimization state')
+            print('\033[36m\033[1mContinuing from previous optimization state\033[0m')
+
             self.LoadRandomState()
+
+            self.init_mask = np.loadtxt(self.data_dir+'Initial_mask.txt')
+
+            self.mask = np.loadtxt(self.data_dir+'INCOMPLETE_mask.txt')
+            self.min_mask = np.loadtxt(self.data_dir+'INCOMPLETE_min_mask.txt')
+            self.last_imp_mask = np.loadtxt(self.data_dir+'INCOMPLETE_last_imp_mask.txt')
+
+            os.remove(self.data_dir+'INCOMPLETE_mask.txt')
+            os.remove(self.data_dir+'INCOMPLETE_min_mask.txt')
+            os.remove(self.data_dir+'INCOMPLETE_last_imp_mask.txt')
+
         else:
             self.CreateMask()
-            self.corr_size = signal.correlate2d(self.mask, self.mask[0:self.sample_size, 0:self.sample_size], mode='valid').shape[0]
             self.init_mask = self.mask.copy()
             self.VisualizeMask(self.init_mask, 'Initial')
+
+        self.corr_size = signal.correlate2d(self.mask, self.mask[0:self.sample_size, 0:self.sample_size], mode='valid').shape[0]
 
     def CreateMask(self):
         """
@@ -197,9 +206,9 @@ class OptimizerClass:
         if self.verbose:
             print('Loaded random state')
 
-    def CalculateMetric(self):
+    def CalculateMetric(self, mask):
         ### IMPLEMENT METRIC CALCULATOR
-        F_matrix = np.array([(signal.correlate2d(self.mask, self.mask[m:m+self.sample_size, n:n+self.sample_size], mode='valid')/(self.corr_size**2)).reshape(self.corr_size**2, ) for m in range(0, self.mask_size-self.sample_size+1) for n in range(0, self.mask_size-self.sample_size+1)])
+        F_matrix = np.array([(signal.correlate2d(mask, mask[m:m+self.sample_size, n:n+self.sample_size], mode='valid')/(self.corr_size**2)).reshape(self.corr_size**2, ) for m in range(0, self.mask_size-self.sample_size+1) for n in range(0, self.mask_size-self.sample_size+1)])
         Q1 = (1/self.sample_size)*np.sum((np.diag(F_matrix)-self.fill_frac)**4)
         np.fill_diagonal(F_matrix, self.fill_frac**2)
         Q2 = (1/(self.sample_size**2-self.sample_size))*np.sum((F_matrix-self.fill_frac**2)**4)
@@ -214,11 +223,23 @@ class OptimizerClass:
             self.JustRun()
 
     def GreatDeluge(self):
-        start_time = time.time()
         if self.cont:
-            pass
+            data = np.load(self.data_dir+'INCOMPLETE_data.npy', allow_pickle=True).item()
+            os.remove(self.data_dir+'INCOMPLETE_data.npy')
+
+            Q_init_metric = self.CalculateMetric(self.init_mask)
+            min_metric = self.CalculateMetric(self.min_mask)
+
+            itr = data['Iterations'][-1]
+            water_level = data['Water Levels'][-1]
+            stop_i = data['Stopping Iterations'][-1]
+
+            saves = [[int(f.split('_')[1].split('-')[0]), f] for f in os.listdir(self.data_dir) if f.startswith('data_')][-1][0]//self.save_ev + 1
+
+            print('\033[36m\033[1mA total of {} iterations has been run so far\033[0m'.format(itr))
+
         else:
-            Q_init_metric = self.CalculateMetric()
+            Q_init_metric = self.CalculateMetric(self.mask)
             min_metric, water_level = 1, 1
             itr, stop_i = 0, 0
             saves = 0
@@ -243,7 +264,7 @@ class OptimizerClass:
                 self.mask[rand_empty] = 1
                 self.mask = self.mask.reshape(self.mask_size, self.mask_size)
 
-                new_metric = self.CalculateMetric()/Q_init_metric
+                new_metric = self.CalculateMetric(self.mask)/Q_init_metric
 
                 if new_metric < water_level:
                     print('\033[32mImprovement on itr: {}\033[0m'.format(itr))
@@ -280,11 +301,6 @@ class OptimizerClass:
             np.savetxt(self.data_dir+'final_mask.txt', self.min_mask, fmt='%i')
             self.VisualizeMask(self.min_mask, 'Final')
             np.save(self.data_dir+'data_{}-{}.npy'.format(self.save_ev*saves, itr), data)
-
-            end_time = time.time()
-            tt = end_time - start_time
-            print('It took {} minutes and {} seconds to run {} iterations'.format(tt//60, round(tt%60, 2), itr))
-            print('Combining all save points into a singular file now')
 
             final_data, files_list = {}, []
             for f in os.listdir(self.data_dir):
@@ -347,9 +363,6 @@ if __name__ == '__main__':
     parser.add_argument(
         '--verbose', '-v', action='store_true', default=False,
         help=('Prints all print outs if called'))
-    parser.add_argument(
-        '--cont', action='store_true', default=False,
-        help=('User set method of continuation'))
     parser.add_argument(
         '--magnification', type=float, default=2,
         help=('Mask magnification'))
