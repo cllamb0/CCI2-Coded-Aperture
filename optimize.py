@@ -234,7 +234,7 @@ class OptimizerClass:
             water_level = data['Water Levels'][-1]
             stop_i = data['Stopping Iterations'][-1]
 
-            saves = [[int(f.split('_')[1].split('-')[0]), f] for f in os.listdir(self.data_dir) if f.startswith('data_')][-1][0]//self.save_ev + 1
+            saves = sorted([[int(f.split('_')[1].split('-')[0]), f] for f in os.listdir(self.data_dir) if f.startswith('data_')])[-1][0]//self.save_ev + 1
 
             print('\033[36m\033[1mA total of {} iterations has been run so far\033[0m'.format(itr))
 
