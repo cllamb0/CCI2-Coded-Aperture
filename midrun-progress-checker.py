@@ -7,10 +7,10 @@ import os
 import sys
 
 
-dir = sys.argv[1]
+direc = sys.argv[1]
 
 final_data, files_list = {}, []
-data_dir = 'Optimizations/{}/'.format(dir)
+data_dir = 'Optimizations/{}/'.format(direc)
 for f in os.listdir(data_dir):
     if f.endswith('.npy') and f.startswith('data_'):
         files_list.append([int(f.split('_')[1].split('-')[0]), f])
