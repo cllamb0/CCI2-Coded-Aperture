@@ -480,6 +480,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '--hole_limit', type=int, default=85,
         help=('Hole size limit'))
+    parser.add_argument(
+        '--balanced', '-b', action='store_false', default=True,
+        help=('Whether to implement hole limitations'))
 
     args = parser.parse_args()
     arg_dict = vars(args)
