@@ -24,6 +24,8 @@ class OptimizerClass:
                  detector_size = 37,
                  magnification = 2,
                  fill_frac     = 0.5,
+                 hole_limit    = 85,
+                 balanced      = True,
                  mask          = None,
                  verbose       = False):
         """
@@ -47,6 +49,8 @@ class OptimizerClass:
         self.magnification = magnification
         self.sample_size = math.floor(self.detector_size/self.magnification)
         self.fill_frac = fill_frac
+        self.hole_limit = hole_limit
+        self.balanced = balanced
         self.mask = mask
         self.verbose = verbose
 
@@ -57,9 +61,9 @@ class OptimizerClass:
 
         if data_dir is None:
             if self.method == 'GreatDeluge':
-                data_dir = 'Optimizations/GD_ms_{}-ff_{}-mag_{}-seed_{}/'.format(self.mask_size, str(self.fill_frac).split('.')[1], self.magnification, self.seed)
+                data_dir = 'Optimizations/GD_ms_{}-ff_{}-mag_{}-seed_{}-hl_{}/'.format(self.mask_size, str(self.fill_frac).split('.')[1], self.magnification, self.seed, self.hole_limit)
             elif self.method == 'JustRun':
-                data_dir = 'Optimizations/JR_ms_{}-ff_{}-mag_{}-seed_{}/'.format(self.mask_size, str(self.fill_frac).split('.')[1], self.magnification, self.seed)
+                data_dir = 'Optimizations/JR_ms_{}-ff_{}-mag_{}-seed_{}-hl_{}/'.format(self.mask_size, str(self.fill_frac).split('.')[1], self.magnification, self.seed, self.hole_limit)
 
             try:
                 os.mkdir(data_dir)
@@ -108,12 +112,20 @@ class OptimizerClass:
         """
         Creation of the first mask for the "optimization" process
         """
-        mask = np.ones(self.mask_size**2)
-        num_fill = math.ceil(self.fill_frac * (self.mask_size**2))
+        hole_checking = True
+        while hole_checking:
+            mask = np.ones(self.mask_size**2)
+            num_fill = math.ceil(self.fill_frac * (self.mask_size**2))
 
-        mask[np.random.choice(mask.size, num_fill, replace=False)] = 0
+            mask[np.random.choice(mask.size, num_fill, replace=False)] = 0
 
-        mask = mask.reshape(self.mask_size, self.mask_size)
+            mask = mask.reshape(self.mask_size, self.mask_size)
+
+            if not self.balanced:
+                hole_checking = False
+            else:
+                if self.hole_size_checking(mask):
+                    hole_checking = False
 
         np.savetxt(self.data_dir+'Initial_mask.txt', mask, fmt='%i')
 
@@ -216,6 +228,94 @@ class OptimizerClass:
 
         return Q
 
+    def hole_size_checking(self, mask, plot=False):
+        # Returns True if all holes are less than the limit and False otherwise
+        # -------- Hole Detection ------------
+        row_holes, holes = [], []
+        for m, row in enumerate(mask):
+            temp_holes = []
+            for n, col in enumerate(row):
+                if col == 1:
+                    temp_holes.append(n)
+            holes.append(temp_holes)
+
+        # -------- Groups Assignment ----------
+        groups, change_groups, gn = [], [[],[]], 0
+        for j, r in enumerate(holes):
+            temp_groups = []
+            for k, c in enumerate(r):
+                if k != 0:
+                    if c-1 != holes[j][k-1]:
+                        gn += 1
+                temp_groups.append(gn)
+
+            if j != 0:
+                sub_groups = [[i for i, x in enumerate(temp_groups) if x == g] for g in set(temp_groups)]
+
+                for sub in sub_groups:
+                    group_matched = False
+                    for s in sub:
+                        if holes[j][s] in holes[j-1]:
+                            if group_matched:
+                                if len(change_groups[0]) != 0:
+                                    if new_sub_group in change_groups[0]:
+                                        change_groups[1].append(change_groups[1][change_groups[0].index(new_sub_group)])
+                                    else:
+                                        change_groups[1].append(new_sub_group)
+                                else:
+                                    change_groups[1].append(new_sub_group)
+                                change_groups[0].append(groups[j-1][holes[j-1].index(holes[j][s])])
+                            else:
+                                group_matched = True
+                                new_sub_group = groups[j-1][holes[j-1].index(holes[j][s])]
+                    if group_matched:
+                        for s in sub:
+                            temp_groups[s] = new_sub_group
+            gn += 1
+            groups.append(temp_groups)
+
+        change_groups = [[old, new] for new, old in sorted(zip(change_groups[1], change_groups[0]))]
+        changed = [[], []]
+        for i, change_pair in enumerate(change_groups):
+            change_from, change_to = change_pair[0], change_pair[1]
+            if change_from == change_to:
+                continue
+            for m, row in enumerate(groups):
+                if i != 0:
+                    if change_to in changed[0]:
+                        change_to = changed[1][changed[0].index(change_to)]
+                    elif change_from in changed[0] and change_to not in changed[1]:
+                        change_to_old = change_to
+                        change_to = changed[1][changed[0].index(change_from)]
+                        change_from = change_to_old
+
+                    changed[0].append(change_from)
+                    changed[1].append(change_to)
+                if change_from in row:
+                    change_indices = [j for j, x in enumerate(row) if x == change_from]
+                    for c in change_indices:
+                        groups[m][c] = change_to
+        unique_groups = set(sum(groups, []))
+
+        if plot:
+            mask_change = np.copy(mask-2)
+            for m, row in enumerate(holes):
+                for n, col in enumerate(row):
+                    mask_change[m,col] = groups[m][n]
+
+            plt.figure(dpi=200)
+            cmap, norm = from_levels_and_colors(sorted([-2]+list(unique_groups)+[list(unique_groups)[-1]+1]),
+                                           ['black']+distinctipy.get_colors(len(unique_groups)))
+            plt.imshow(mask_change, cmap=cmap, norm=norm)
+            plt.show()
+        else:
+            group_counts = [list(unique_groups),
+                    [sum([sum([1 for i, x in enumerate(row) if x == g]) for row in groups]) for g in unique_groups]]
+
+            alarm = [i for i, x in enumerate(group_counts[1]) if x >= self.hole_limit]
+
+            return not alarm
+
     def Optimize(self):
         if self.method == 'GreatDeluge':
             self.GreatDeluge()
@@ -257,12 +357,23 @@ class OptimizerClass:
             while (stop_i < self.stopItr):
                 itr += 1
 
-                self.mask = self.mask.reshape(self.mask_size**2, )
-                rand_pop   = np.random.choice(np.where(self.mask > 0)[0]) # Random populated position
-                rand_empty = np.random.choice(np.where(self.mask < 1)[0]) # Random empty position
-                self.mask[rand_pop] = 0
-                self.mask[rand_empty] = 1
-                self.mask = self.mask.reshape(self.mask_size, self.mask_size)
+                hole_checking = True
+                while hole_checking:
+                    mask_temp = self.mask.copy()
+                    mask_temp = self.mask.reshape(self.mask_size**2, )
+                    rand_pop   = np.random.choice(np.where(mask_temp > 0)[0]) # Random populated position
+                    rand_empty = np.random.choice(np.where(mask_temp < 1)[0]) # Random empty position
+                    mask_temp[rand_pop] = 0
+                    mask_temp[rand_empty] = 1
+                    mask_temp = mask_temp.reshape(self.mask_size, self.mask_size)
+
+                    if not self.balanced:
+                        hole_checking = False
+                    else:
+                        if self.hole_size_checking(mask_temp):
+                            hole_checking = False
+
+                self.mask = mask_temp.copy()
 
                 new_metric = self.CalculateMetric(self.mask)/Q_init_metric
 
@@ -366,6 +477,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '--magnification', type=float, default=2,
         help=('Mask magnification'))
+    parser.add_argument(
+        '--hole_limit', type=int, default=85,
+        help=('Hole size limit'))
 
     args = parser.parse_args()
     arg_dict = vars(args)
