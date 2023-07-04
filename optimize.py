@@ -178,7 +178,7 @@ class OptimizerClass:
         plt.figure(dpi=400, facecolor='white')
 
         plt.plot(final_data['Iterations'], final_data['Metrics'], label='Metrics', alpha=0.5, color='grey')
-        plt.plot(final_data['Iterations'], final_data['Water Levels'], label='Water Level', color='black')
+        plt.plot(final_data['Iterations'], final_data['Water Levels'], label='Water Level', linewidth=0.5, color='black')
         plt.legend()
         plt.xlabel('# Iterations')
         plt.savefig(self.plots_dir+'Water_Level_Evolution.png', bbox_inches='tight')
@@ -405,9 +405,16 @@ class OptimizerClass:
                         temp_data[key] = data[key][:-1]
                         data[key] = [data[key][-1]]
                     np.save(self.data_dir+'data_{}-{}.npy'.format(self.save_ev*saves, self.save_ev*(saves+1)-1), temp_data)
+                    print('----------------------------------')
+                    print('----------------------------------')
                     print('Completed {} iterations! Creating a save point now'.format(self.save_ev*(saves+1)))
+                    print('----------------------------------')
+                    print('----------------------------------')
+                    self.VisualizeMask(self.min_mask, '{}-{}_best_current'.format(self.save_ev*saves, self.save_ev*(saves+1)-1))
                     saves += 1
                     del temp_data
+
+
 
             np.savetxt(self.data_dir+'final_mask.txt', self.min_mask, fmt='%i')
             self.VisualizeMask(self.min_mask, 'Final')
