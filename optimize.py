@@ -130,7 +130,7 @@ class OptimizerClass:
 
                 mask = mask.reshape(self.mask_size, self.mask_size)
             else:
-                num_fill = math.ceil(self.fill_frac * (section_size**2))
+                num_fill = math.ceil(self.fill_frac * (self.section_size**2))
 
                 group_indices = []
                 for col_section in range(math.floor(self.mask_size/self.section_size)):
