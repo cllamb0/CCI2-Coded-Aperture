@@ -6,6 +6,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.patches import RegularPolygon
 from matplotlib.collections import PatchCollection
+from distinctipy import distinctipy
 import math
 import scipy.signal as signal
 
@@ -27,7 +28,10 @@ class OptimizerClass:
                  hole_limit    = 85,
                  balanced      = True,
                  mask          = None,
-                 verbose       = False):
+                 verbose       = False,
+                 section_offset= 2,
+                 sectioning    = True,
+                 group_indices = None):
         """
         Initializer for all class variables and intial
         """
@@ -53,6 +57,10 @@ class OptimizerClass:
         self.balanced = balanced
         self.mask = mask
         self.verbose = verbose
+        self.section_offset = section_offset
+        self.section_size = self.sample_size - self.section_offset
+        self.sectioning = sectioning
+        self.group_indices = group_indices
 
         try:
             os.mkdir('Optimizations')
@@ -114,12 +122,54 @@ class OptimizerClass:
         """
         hole_checking = True
         while hole_checking:
-            mask = np.ones(self.mask_size**2)
-            num_fill = math.ceil(self.fill_frac * (self.mask_size**2))
+            if not self.sectioning:
+                mask = np.ones(self.mask_size**2)
+                num_fill = math.ceil(self.fill_frac * (self.mask_size**2))
 
-            mask[np.random.choice(mask.size, num_fill, replace=False)] = 0
+                mask[np.random.choice(mask.size, num_fill, replace=False)] = 0
 
-            mask = mask.reshape(self.mask_size, self.mask_size)
+                mask = mask.reshape(self.mask_size, self.mask_size)
+            else:
+                num_fill = math.ceil(self.fill_frac * (section_size**2))
+
+                group_indices = []
+                for col_section in range(math.floor(self.mask_size/self.section_size)):
+                    temp_column = np.ones(self.section_size**2)
+                    temp_column[np.random.choice(temp_column.size, num_fill, replace=False)] = 0
+                    temp_column = temp_column.reshape(self.section_size, self.section_size)
+                    group_indices.append([[0, col_section*self.section_size],
+                                              [self.section_size, (col_section+1)*self.section_size]])
+                    for row_section in range(math.floor(self.mask_size/self.section_size)-1):
+                        temp_mask = np.ones(self.section_size**2)
+                        temp_mask[np.random.choice(temp_mask.size, num_fill, replace=False)] = 0
+                        temp_mask = temp_mask.reshape(self.section_size, self.section_size)
+                        temp_column = np.concatenate((temp_column, temp_mask), axis=0)
+                        group_indices.append([[(row_section+1)*self.section_size, (col_section)*self.section_size],
+                                              [(row_section+2)*self.section_size, (col_section+1)*self.section_size]])
+                    if col_section == 0:
+                        mask = np.copy(temp_column)
+                    else:
+                        mask = np.concatenate((mask, temp_column), axis=1)
+
+                if self.mask_size % self.section_size != 0:
+                    fix_column = np.ones((self.mask_size%self.section_size)*(mask.shape[0]))
+                    col_fix_fill = math.floor(self.fill_frac * (fix_column.size))
+                    fix_column[np.random.choice(fix_column.size, col_fix_fill, replace=False)] = 0
+                    fix_column = fix_column.reshape((mask.shape[0]), (self.mask_size%self.section_size))
+
+                    mask = np.concatenate((mask, fix_column), axis=1)
+                    group_indices.append([[0, mask.shape[0]], list(mask.shape)])
+
+                    fix_row = np.ones((self.mask_size%self.section_size)*(mask.shape[1]))
+                    row_fix_fill = math.floor(self.fill_frac * (fix_row.size))
+                    fix_row[np.random.choice(fix_row.size, row_fix_fill, replace=False)] = 0
+                    fix_row = fix_row.reshape((self.mask_size%self.section_size), (mask.shape[1]))
+
+                    sms = mask.shape[0]
+                    mask = np.concatenate((mask, fix_row), axis=0)
+                    group_indices.append([[sms, 0], list(mask.shape)])
+
+                self.group_indices = group_indices
 
             if not self.balanced:
                 hole_checking = False
@@ -359,13 +409,32 @@ class OptimizerClass:
 
                 hole_checking = True
                 while hole_checking:
-                    mask_temp = self.mask.copy()
-                    mask_temp = self.mask.reshape(self.mask_size**2, )
-                    rand_pop   = np.random.choice(np.where(mask_temp > 0)[0]) # Random populated position
-                    rand_empty = np.random.choice(np.where(mask_temp < 1)[0]) # Random empty position
-                    mask_temp[rand_pop] = 0
-                    mask_temp[rand_empty] = 1
-                    mask_temp = mask_temp.reshape(self.mask_size, self.mask_size)
+                    if not self.sectioning:
+                        mask_temp = self.mask.copy()
+                        mask_temp = self.mask.reshape(self.mask_size**2, )
+                        rand_pop   = np.random.choice(np.where(mask_temp > 0)[0]) # Random populated position
+                        rand_empty = np.random.choice(np.where(mask_temp < 1)[0]) # Random empty position
+                        mask_temp[rand_pop] = 0
+                        mask_temp[rand_empty] = 1
+                        mask_temp = mask_temp.reshape(self.mask_size, self.mask_size)
+                    else:
+                        group_pick = np.random.choice(list(np.arange(len(self.group_indices))))
+
+                        mask_temp = self.mask.copy()
+                        chosen_group = mask_temp[self.group_indices[group_pick][0][0]:self.group_indices[group_pick][1][0],
+                                                 self.group_indices[group_pick][0][1]:self.group_indices[group_pick][1][1]]
+                        original_shape = chosen_group.shape
+                        chosen_group = chosen_group.reshape(chosen_group.size, )
+
+                        rand_pop   = np.random.choice(np.where(chosen_group > 0)[0]) # Random populated position
+                        rand_empty = np.random.choice(np.where(chosen_group < 1)[0]) # Random empty position
+                        chosen_group[rand_pop] = 0
+                        chosen_group[rand_empty] = 1
+
+                        chosen_group = chosen_group.reshape(original_shape)
+
+                        mask_temp[self.group_indices[group_pick][0][0]:self.group_indices[group_pick][1][0],
+                                  self.group_indices[group_pick][0][1]:self.group_indices[group_pick][1][1]] = chosen_group
 
                     if not self.balanced:
                         hole_checking = False
@@ -490,6 +559,12 @@ if __name__ == '__main__':
     parser.add_argument(
         '--balanced', '-b', action='store_false', default=True,
         help=('Whether to implement hole limitations'))
+    parser.add_argument(
+        '--sectioning', action='store_false', default=True,
+        help=('Whether to implement mask sectioning'))
+    parser.add_argument(
+        '--section_offset', type=int, default=2,
+        help=('Size of section offset from magnified detector plane size'))
 
     args = parser.parse_args()
     arg_dict = vars(args)
