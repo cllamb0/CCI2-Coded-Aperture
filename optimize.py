@@ -54,7 +54,7 @@ class OptimizerClass:
         self.mask_size = mask_size
         self.detector_size = detector_size
         self.magnification = magnification
-        self.sample_size = math.floor(self.detector_size/self.magnification)
+        self.sample_size = math.floor(self.detector_size/(2**(self.magnification-1)))
         self.sens_sample = np.ones((self.sample_size, self.sample_size))
         self.fill_frac = fill_frac
         self.hole_limit = hole_limit
@@ -124,6 +124,8 @@ class OptimizerClass:
             self.VisualizeMask(self.init_mask, 'Initial')
 
         self.corr_size = signal.correlate2d(self.mask, self.mask[0:self.sample_size, 0:self.sample_size], mode='valid').shape[0]
+        print(self.sample_size)
+        print(self.corr_size)
 
     def CreateMask(self, save=True):
         """
