@@ -34,7 +34,7 @@ class OptimizerClass:
                  group_indices = None,
                  transmission  = 0.05,
                  corr_weight   = 1,
-                 sens_weight   = 2):
+                 sens_weight   = 1):
         """
         Initializer for all class variables and intial
         """
@@ -600,7 +600,7 @@ if __name__ == '__main__':
         '--corr_weight', type=float, default=1,
         help=('Weighting factor for cross correlation in metric'))
     parser.add_argument(
-        '--sens_weight', type=float, default=2,
+        '--sens_weight', type=float, default=1,
         help=('Weighting factor for sensitivity in metric'))
 
 
