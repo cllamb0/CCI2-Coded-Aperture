@@ -21,17 +21,20 @@ class OptimizerClass:
                  cont          = False,
                  seed          = int(time.time()),
                  save_ev       = 1000,
-                 mask_size     = 64,
+                 mask_size     = 46,
                  detector_size = 37,
-                 magnification = 2,
+                 magnification = 3,
                  fill_frac     = 0.5,
-                 hole_limit    = 85,
+                 hole_limit    = 80,
                  balanced      = True,
                  mask          = None,
                  verbose       = False,
-                 section_offset= 2,
+                 section_offset= 0,
                  sectioning    = True,
-                 group_indices = None):
+                 group_indices = None,
+                 transmission  = 0.05,
+                 corr_weight   = 1,
+                 sens_weight   = 2):
         """
         Initializer for all class variables and intial
         """
@@ -52,6 +55,7 @@ class OptimizerClass:
         self.detector_size = detector_size
         self.magnification = magnification
         self.sample_size = math.floor(self.detector_size/self.magnification)
+        self.sens_sample = np.ones((self.sample_size, self.sample_size))
         self.fill_frac = fill_frac
         self.hole_limit = hole_limit
         self.balanced = balanced
@@ -61,6 +65,9 @@ class OptimizerClass:
         self.section_size = self.sample_size - self.section_offset
         self.sectioning = sectioning
         self.group_indices = group_indices
+        self.transmission = transmission
+        self.corr_weight = corr_weight
+        self.sens_weight = sens_weight
 
         try:
             os.mkdir('Optimizations')
@@ -280,14 +287,18 @@ class OptimizerClass:
             print('Loaded random state')
 
     def CalculateMetric(self, mask):
-        ### IMPLEMENT METRIC CALCULATOR
+        # Cross correlation metric
         F_matrix = np.array([(signal.correlate2d(mask, mask[m:m+self.sample_size, n:n+self.sample_size], mode='valid')/(self.corr_size**2)).reshape(self.corr_size**2, ) for m in range(0, self.mask_size-self.sample_size+1) for n in range(0, self.mask_size-self.sample_size+1)])
         Q1 = (1/self.sample_size)*np.sum((np.diag(F_matrix)-self.fill_frac)**4)
         np.fill_diagonal(F_matrix, self.fill_frac**2)
         Q2 = (1/(self.sample_size**2-self.sample_size))*np.sum((F_matrix-self.fill_frac**2)**4)
-        Q = Q1 + Q2
 
-        return Q
+        # "Sensitivity" metric
+        sens_mask = np.copy(mask)
+        sens_mask[sens_mask == 0] = self.transmission
+        sensitivity_matrix = signal.correlate2d(sens_mask, self.sens_sample, mode='valid')
+
+        return self.corr_weight*(Q1+Q2) + self.sens_weight*(np.var(sensitivity_matrix))
 
     def hole_size_checking(self, mask, plot=False):
         # Returns True if all holes are less than the limit and False otherwise
@@ -582,6 +593,16 @@ if __name__ == '__main__':
     parser.add_argument(
         '--section_offset', type=int, default=0,
         help=('Size of the section offset from magnified detector plane size'))
+    parser.add_argument(
+        '--transmission', type=float, default=0.05,
+        help=('Transmission probability of mask elements'))
+    parser.add_argument(
+        '--corr_weight', type=float, default=1,
+        help=('Weighting factor for cross correlation in metric'))
+    parser.add_argument(
+        '--sens_weight', type=float, default=2,
+        help=('Weighting factor for sensitivity in metric'))
+
 
     args = parser.parse_args()
     arg_dict = vars(args)
