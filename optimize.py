@@ -97,6 +97,8 @@ class OptimizerClass:
         if self.cont:
             print('\033[36m\033[1mContinuing from previous optimization state\033[0m')
 
+            self.CreateMask(save=False)
+
             self.LoadRandomState()
 
             self.init_mask = np.loadtxt(self.data_dir+'Initial_mask.txt')
@@ -116,10 +118,15 @@ class OptimizerClass:
 
         self.corr_size = signal.correlate2d(self.mask, self.mask[0:self.sample_size, 0:self.sample_size], mode='valid').shape[0]
 
-    def CreateMask(self):
+    def CreateMask(self, save=True):
         """
         Creation of the first mask for the "optimization" process
         """
+        temp_flip = False
+        if not save and self.balanced:
+            self.balanced = False
+            temp_flip = True
+
         hole_checking = True
         while hole_checking:
             if not self.sectioning:
@@ -171,15 +178,19 @@ class OptimizerClass:
 
                 self.group_indices = group_indices
 
-            if not self.balanced:
-                hole_checking = False
-            else:
+            if self.balanced:
                 if self.hole_size_checking(mask):
                     hole_checking = False
+            else:
+                hole_checking = False
 
-        np.savetxt(self.data_dir+'Initial_mask.txt', mask, fmt='%i')
+                if temp_flip:
+                    self.balanced = True
 
-        self.mask = mask.copy()
+        if save:
+            np.savetxt(self.data_dir+'Initial_mask.txt', mask, fmt='%i')
+
+            self.mask = mask.copy()
 
     def VisualizeMask(self, plot_mask, sname):
         """
@@ -384,7 +395,10 @@ class OptimizerClass:
             water_level = data['Water Levels'][-1]
             stop_i = data['Stopping Iterations'][-1]
 
-            saves = sorted([[int(f.split('_')[1].split('-')[0]), f] for f in os.listdir(self.data_dir) if f.startswith('data_')])[-1][0]//self.save_ev + 1
+            try:
+                saves = sorted([[int(f.split('_')[1].split('-')[0]), f] for f in os.listdir(self.data_dir) if f.startswith('data_')])[-1][0]//self.save_ev + 1
+            except IndexError:
+                saves = 0
 
             print('\033[36m\033[1mA total of {} iterations has been run so far\033[0m'.format(itr))
 
@@ -530,7 +544,7 @@ if __name__ == '__main__':
         '--method', '-m', type=str, default='GreatDeluge',
         help=('Name of optimization method to use, either "GreatDeluge" or "JustRun"'))
     parser.add_argument(
-        '--stopItr', type=int, default=500,
+        '--stopItr', type=int, default=100,
         help=('Number of iterations to run or run without improvement'))
     parser.add_argument(
         '--save_ev', type=int, default=2500,
@@ -542,8 +556,11 @@ if __name__ == '__main__':
         '--seed', '-s', type=int, default=int(time.time()),
         help=('Randomization seed'))
     parser.add_argument(
-        '--mask_size', type=int, default=64,
+        '--mask_size', type=int, default=46,
         help=('Size of coded aperture mask on one side of the square mask'))
+    parser.add_argument(
+        '--detector_size', type=int, default=37,
+        help=('Number of detector strips on each detector'))
     parser.add_argument(
         '--fill_frac', type=float, default=0.5,
         help=('The fraction of elements filled with masking elements'))
@@ -551,10 +568,10 @@ if __name__ == '__main__':
         '--verbose', '-v', action='store_true', default=False,
         help=('Prints all print outs if called'))
     parser.add_argument(
-        '--magnification', type=float, default=2,
+        '--magnification', type=float, default=3,
         help=('Mask magnification'))
     parser.add_argument(
-        '--hole_limit', type=int, default=85,
+        '--hole_limit', type=int, default=80,
         help=('Hole size limit'))
     parser.add_argument(
         '--balanced', '-b', action='store_false', default=True,
@@ -563,8 +580,8 @@ if __name__ == '__main__':
         '--sectioning', action='store_false', default=True,
         help=('Whether to implement mask sectioning'))
     parser.add_argument(
-        '--section_offset', type=int, default=2,
-        help=('Size of section offset from magnified detector plane size'))
+        '--section_offset', type=int, default=0,
+        help=('Size of the section offset from magnified detector plane size'))
 
     args = parser.parse_args()
     arg_dict = vars(args)
