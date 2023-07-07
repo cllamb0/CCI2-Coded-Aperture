@@ -124,8 +124,6 @@ class OptimizerClass:
             self.VisualizeMask(self.init_mask, 'Initial')
 
         self.corr_size = signal.correlate2d(self.mask, self.mask[0:self.sample_size, 0:self.sample_size], mode='valid').shape[0]
-        print(self.sample_size)
-        print(self.corr_size)
 
     def CreateMask(self, save=True):
         """
