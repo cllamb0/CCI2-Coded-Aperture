@@ -76,10 +76,11 @@ class OptimizerClass:
 
         if data_dir is None:
             if self.method == 'GreatDeluge':
-                data_dir = 'Optimizations/GD_ms_{}-ff_{}-mag_{}-seed_{}-hl_{}/'.format(self.mask_size, str(self.fill_frac).split('.')[1], self.magnification, self.seed, self.hole_limit)
+                data_dir = 'Optimizations/GD_ms_{}-ff_{}-mag_{}-seed_{}-hl_{}-cw_{}-sw_{}/'.format(
+                            self.mask_size, str(self.fill_frac).split('.')[1], self.magnification, self.seed, self.hole_limit, self.corr_weight, self.sens_weight)
             elif self.method == 'JustRun':
-                data_dir = 'Optimizations/JR_ms_{}-ff_{}-mag_{}-seed_{}-hl_{}/'.format(self.mask_size, str(self.fill_frac).split('.')[1], self.magnification, self.seed, self.hole_limit)
-
+                data_dir = 'Optimizations/JR_ms_{}-ff_{}-mag_{}-seed_{}-hl_{}-cw_{}-sw_{}/'.format(
+                            self.mask_size, str(self.fill_frac).split('.')[1], self.magnification, self.seed, self.hole_limit, self.corr_weight, self.sens_weight)
             try:
                 os.mkdir(data_dir)
                 if self.verbose:
@@ -288,15 +289,21 @@ class OptimizerClass:
 
     def CalculateMetric(self, mask):
         # Cross correlation metric
-        F_matrix = np.array([(signal.correlate2d(mask, mask[m:m+self.sample_size, n:n+self.sample_size], mode='valid')/(self.corr_size**2)).reshape(self.corr_size**2, ) for m in range(0, self.mask_size-self.sample_size+1) for n in range(0, self.mask_size-self.sample_size+1)])
-        Q1 = (1/self.sample_size)*np.sum((np.diag(F_matrix)-self.fill_frac)**4)
-        np.fill_diagonal(F_matrix, self.fill_frac**2)
-        Q2 = (1/(self.sample_size**2-self.sample_size))*np.sum((F_matrix-self.fill_frac**2)**4)
+        if self.corr_weight != 0:
+            F_matrix = np.array([(signal.correlate2d(mask, mask[m:m+self.sample_size, n:n+self.sample_size], mode='valid')/(self.corr_size**2)).reshape(self.corr_size**2, ) for m in range(0, self.mask_size-self.sample_size+1) for n in range(0, self.mask_size-self.sample_size+1)])
+            Q1 = (1/self.sample_size)*np.sum((np.diag(F_matrix)-self.fill_frac)**4)
+            np.fill_diagonal(F_matrix, self.fill_frac**2)
+            Q2 = (1/(self.sample_size**2-self.sample_size))*np.sum((F_matrix-self.fill_frac**2)**4)
+        else:
+            Q1, Q2 = 1, 1
 
         # "Sensitivity" metric
-        sens_mask = np.copy(mask)
-        sens_mask[sens_mask == 0] = self.transmission
-        sensitivity_matrix = signal.correlate2d(sens_mask, self.sens_sample, mode='valid')
+        if self.sens_weight != 0:
+            sens_mask = np.copy(mask)
+            sens_mask[sens_mask == 0] = self.transmission
+            sensitivity_matrix = signal.correlate2d(sens_mask, self.sens_sample, mode='valid')
+        else:
+            sensitivity_matrix = self.sens_sample
 
         return self.corr_weight*(Q1+Q2) + self.sens_weight*(np.var(sensitivity_matrix))
 
@@ -600,7 +607,7 @@ if __name__ == '__main__':
         '--corr_weight', type=float, default=1,
         help=('Weighting factor for cross correlation in metric'))
     parser.add_argument(
-        '--sens_weight', type=float, default=1,
+        '--sens_weight', type=float, default=2,
         help=('Weighting factor for sensitivity in metric'))
 
 
