@@ -9,6 +9,7 @@ from matplotlib.collections import PatchCollection
 from distinctipy import distinctipy
 import math
 import scipy.signal as signal
+from matplotlib.colors import from_levels_and_colors
 
 class OptimizerClass:
     def __init__(self,
