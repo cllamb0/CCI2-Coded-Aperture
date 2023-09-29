@@ -35,7 +35,8 @@ class OptimizerClass:
                  group_indices = None,
                  transmission  = 0.05,
                  corr_weight   = 1,
-                 sens_weight   = 1):
+                 sens_weight   = 1,
+                 dual_corr     = False):
         """
         Initializer for all class variables and intial
         """
@@ -45,30 +46,31 @@ class OptimizerClass:
         if verbose:
             print('Initializing optimization configuration')
 
-        self.method = method
-        self.stopItr = stopItr
-        self.data_fname = data_fname
-        self.decay_rate = decay_rate
-        self.cont = cont
-        self.seed = seed
-        self.save_ev = save_ev
-        self.mask_size = mask_size
-        self.detector_size = detector_size
-        self.magnification = magnification
-        self.sample_size = math.floor(self.detector_size/self.magnification)
-        self.sens_sample = np.ones((self.sample_size, self.sample_size))
-        self.open_frac = open_frac
-        self.hole_limit = hole_limit
-        self.balanced = balanced
-        self.mask = mask
-        self.verbose = verbose
+        self.method         = method
+        self.stopItr        = stopItr
+        self.data_fname     = data_fname
+        self.decay_rate     = decay_rate
+        self.cont           = cont
+        self.seed           = seed
+        self.save_ev        = save_ev
+        self.mask_size      = mask_size
+        self.detector_size  = detector_size
+        self.magnification  = magnification
+        self.sample_size    = math.floor(self.detector_size/self.magnification)
+        self.sens_sample    = np.ones((self.sample_size, self.sample_size))
+        self.open_frac      = open_frac
+        self.hole_limit     = hole_limit
+        self.balanced       = balanced
+        self.mask           = mask
+        self.verbose        = verbose
         self.section_offset = section_offset
-        self.section_size = self.sample_size - self.section_offset
-        self.sectioning = sectioning
-        self.group_indices = group_indices
-        self.transmission = transmission
-        self.corr_weight = corr_weight
-        self.sens_weight = sens_weight
+        self.section_size   = self.sample_size - self.section_offset
+        self.sectioning     = sectioning
+        self.group_indices  = group_indices
+        self.transmission   = transmission
+        self.corr_weight    = corr_weight
+        self.sens_weight    = sens_weight
+        self.dual_corr      = dual_corr
 
         try:
             os.mkdir('Optimizations')
@@ -263,7 +265,7 @@ class OptimizerClass:
         ax2.legend(loc=1, fontsize=9)
         ax2.set_xlabel('# of Iterations')
         fig.tight_layout()
-        plt.savefig(data_dir+'Plots/MIDRUN_Metrics_Evolution.png',
+        plt.savefig(self.plots_dir+'Plots/Metrics_Evolution.png',
                     bbox_inches='tight', facecolor='white')
         plt.close()
 
@@ -655,6 +657,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '--sens_weight', type=float, default=2,
         help=('Weighting factor for sensitivity in metric'))
+    parser.add_argument(
+        '--dual_corr', action='store_true', default=False,
+        help=('Dual optimizes for magnification 2 and 4'))
 
 
     args = parser.parse_args()
