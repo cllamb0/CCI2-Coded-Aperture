@@ -25,7 +25,7 @@ class OptimizerClass:
                  mask_size     = 46,
                  detector_size = 37,
                  magnification = 3,
-                 fill_frac     = 0.5,
+                 open_frac     = 0.5,
                  hole_limit    = 80,
                  balanced      = True,
                  mask          = None,
@@ -57,7 +57,7 @@ class OptimizerClass:
         self.magnification = magnification
         self.sample_size = math.floor(self.detector_size/self.magnification)
         self.sens_sample = np.ones((self.sample_size, self.sample_size))
-        self.fill_frac = fill_frac
+        self.open_frac = open_frac
         self.hole_limit = hole_limit
         self.balanced = balanced
         self.mask = mask
@@ -76,12 +76,8 @@ class OptimizerClass:
             pass
 
         if data_dir is None:
-            if self.method == 'GreatDeluge':
-                data_dir = 'Optimizations/GD_ms_{}-ff_{}-mag_{}-seed_{}-hl_{}-cw_{}-sw_{}/'.format(
-                            self.mask_size, str(self.fill_frac).split('.')[1], self.magnification, self.seed, self.hole_limit, self.corr_weight, self.sens_weight)
-            elif self.method == 'JustRun':
-                data_dir = 'Optimizations/JR_ms_{}-ff_{}-mag_{}-seed_{}-hl_{}-cw_{}-sw_{}/'.format(
-                            self.mask_size, str(self.fill_frac).split('.')[1], self.magnification, self.seed, self.hole_limit, self.corr_weight, self.sens_weight)
+            data_dir = 'Optimizations/GD_ms_{}-of_{}-mag_{}-seed_{}-hl_{}-cw_{}-sw_{}/'.format(
+                        self.mask_size, str(self.open_frac).split('.')[1], self.magnification, self.seed, self.hole_limit, self.corr_weight, self.sens_weight)
             try:
                 os.mkdir(data_dir)
                 if self.verbose:
@@ -139,25 +135,25 @@ class OptimizerClass:
         hole_checking = True
         while hole_checking:
             if not self.sectioning:
-                mask = np.ones(self.mask_size**2)
-                num_fill = math.ceil(self.fill_frac * (self.mask_size**2))
+                mask = np.zeros(self.mask_size**2)
+                num_open = math.ceil(self.open_frac * (self.mask_size**2))
 
-                mask[np.random.choice(mask.size, num_fill, replace=False)] = 0
+                mask[np.random.choice(mask.size, num_open, replace=False)] = 1
 
                 mask = mask.reshape(self.mask_size, self.mask_size)
             else:
-                num_fill = math.ceil(self.fill_frac * (self.section_size**2))
+                num_open = math.ceil(self.open_frac * (self.section_size**2))
 
                 group_indices = []
                 for col_section in range(math.floor(self.mask_size/self.section_size)):
-                    temp_column = np.ones(self.section_size**2)
-                    temp_column[np.random.choice(temp_column.size, num_fill, replace=False)] = 0
+                    temp_column = np.zeros(self.section_size**2)
+                    temp_column[np.random.choice(temp_column.size, num_open, replace=False)] = 1
                     temp_column = temp_column.reshape(self.section_size, self.section_size)
                     group_indices.append([[0, col_section*self.section_size],
                                               [self.section_size, (col_section+1)*self.section_size]])
                     for row_section in range(math.floor(self.mask_size/self.section_size)-1):
-                        temp_mask = np.ones(self.section_size**2)
-                        temp_mask[np.random.choice(temp_mask.size, num_fill, replace=False)] = 0
+                        temp_mask = np.zeros(self.section_size**2)
+                        temp_mask[np.random.choice(temp_mask.size, num_open, replace=False)] = 1
                         temp_mask = temp_mask.reshape(self.section_size, self.section_size)
                         temp_column = np.concatenate((temp_column, temp_mask), axis=0)
                         group_indices.append([[(row_section+1)*self.section_size, (col_section)*self.section_size],
@@ -168,17 +164,17 @@ class OptimizerClass:
                         mask = np.concatenate((mask, temp_column), axis=1)
 
                 if self.mask_size % self.section_size != 0:
-                    fix_column = np.ones((self.mask_size%self.section_size)*(mask.shape[0]))
-                    col_fix_fill = math.floor(self.fill_frac * (fix_column.size))
-                    fix_column[np.random.choice(fix_column.size, col_fix_fill, replace=False)] = 0
+                    fix_column = np.zeros((self.mask_size%self.section_size)*(mask.shape[0]))
+                    col_fix_open = math.floor(self.open_frac * (fix_column.size))
+                    fix_column[np.random.choice(fix_column.size, col_fix_open, replace=False)] = 1
                     fix_column = fix_column.reshape((mask.shape[0]), (self.mask_size%self.section_size))
 
                     mask = np.concatenate((mask, fix_column), axis=1)
                     group_indices.append([[0, mask.shape[0]], list(mask.shape)])
 
-                    fix_row = np.ones((self.mask_size%self.section_size)*(mask.shape[1]))
-                    row_fix_fill = math.floor(self.fill_frac * (fix_row.size))
-                    fix_row[np.random.choice(fix_row.size, row_fix_fill, replace=False)] = 0
+                    fix_row = np.zeros((self.mask_size%self.section_size)*(mask.shape[1]))
+                    row_fix_open = math.floor(self.open_frac * (fix_row.size))
+                    fix_row[np.random.choice(fix_row.size, row_fix_open, replace=False)] = 1
                     fix_row = fix_row.reshape((self.mask_size%self.section_size), (mask.shape[1]))
 
                     sms = mask.shape[0]
@@ -233,7 +229,7 @@ class OptimizerClass:
         ax.set_aspect('equal')
         ax.autoscale_view()
 
-        plt.title('Mask Size: {} | Fill Fraction: {}'.format(self.mask_size, self.fill_frac) +
+        plt.title('Mask Size: {} | Open Fraction: {}'.format(self.mask_size, self.open_frac) +
                   '\nRandom Seed: {}'.format(self.seed), fontsize='small', y = 0.95)
 
         plt.savefig(self.plots_dir+'{}_coded_mask.png'.format(sname), bbox_inches='tight')
@@ -255,6 +251,23 @@ class OptimizerClass:
         plt.close()
 
         print('Saved the final water level evolution plot')
+
+    def VisualizeMetricsEvolution(self):
+        final_data = np.load(self.data_dir+'final_data.npy', allow_pickle=True).item()
+
+        fig, [ax1, ax2] = plt.subplots(nrows=2, sharex=True, dpi=300, figsize=[10,7])
+
+        ax1.plot(final_data['Iterations'], final_data['Q Metrics'], color='red', label='Cross Correlation')
+        ax1.legend(loc=1, fontsize=9)
+        ax2.plot(final_data['Iterations'], final_data['Sens Metrics'], color='green', label='Sensitivity')
+        ax2.legend(loc=1, fontsize=9)
+        ax2.set_xlabel('# of Iterations')
+        fig.tight_layout()
+        plt.savefig(data_dir+'Plots/MIDRUN_Metrics_Evolution.png',
+                    bbox_inches='tight', facecolor='white')
+        plt.close()
+
+        print('Saved the final metrics evolution plot')
 
     def SaveRandomState(self):
         """
@@ -288,15 +301,17 @@ class OptimizerClass:
         if self.verbose:
             print('Loaded random state')
 
-    def CalculateMetric(self, mask):
+    def CalculateMetric(self, mask, init_metrics=None):
         # Cross correlation metric
+        # init_metrics in the form: [init_corr, init_sens]
         if self.corr_weight != 0:
             F_matrix = np.array([(signal.correlate2d(mask, mask[m:m+self.sample_size, n:n+self.sample_size], mode='valid')/(self.corr_size**2)).reshape(self.corr_size**2, ) for m in range(0, self.mask_size-self.sample_size+1) for n in range(0, self.mask_size-self.sample_size+1)])
-            Q1 = (1/self.sample_size)*np.sum((np.diag(F_matrix)-self.fill_frac)**4)
-            np.fill_diagonal(F_matrix, self.fill_frac**2)
-            Q2 = (1/(self.sample_size**2-self.sample_size))*np.sum((F_matrix-self.fill_frac**2)**4)
+            Q1 = (1/self.sample_size)*np.sum((np.diag(F_matrix)-self.open_frac)**4)
+            np.fill_diagonal(F_matrix, self.open_frac**2)
+            Q2 = (1/(self.sample_size**2-self.sample_size))*np.sum((F_matrix-self.open_frac**2)**4)
+            Q = Q1 + Q2
         else:
-            Q1, Q2 = 1, 1
+            Q = 1
 
         # "Sensitivity" metric
         if self.sens_weight != 0:
@@ -305,8 +320,12 @@ class OptimizerClass:
             sensitivity_matrix = signal.correlate2d(sens_mask, self.sens_sample, mode='valid')
         else:
             sensitivity_matrix = self.sens_sample
+        sens_Q = np.var(sensitivity_matrix)
 
-        return self.corr_weight*(Q1+Q2) + self.sens_weight*(np.var(sensitivity_matrix))
+        if init_metrics is None:
+            return Q, sens_Q
+        else:
+            return self.corr_weight*(Q/init_metrics[0]), self.sens_weight*(sens_Q/init_metrics[1])
 
     def hole_size_checking(self, mask, plot=False):
         # Returns True if all holes are less than the limit and False otherwise
@@ -355,7 +374,7 @@ class OptimizerClass:
             groups.append(temp_groups)
 
         change_groups = [[old, new] for new, old in sorted(zip(change_groups[1], change_groups[0]))]
-        changed = [[], []]
+        changed, exceptions = [[], []], [[], []]
         for i, change_pair in enumerate(change_groups):
             change_from, change_to = change_pair[0], change_pair[1]
             if change_from == change_to:
@@ -364,17 +383,37 @@ class OptimizerClass:
                 if i != 0:
                     if change_to in changed[0]:
                         change_to = changed[1][changed[0].index(change_to)]
-                    elif change_from in changed[0] and change_to not in changed[1]:
-                        change_to_old = change_to
-                        change_to = changed[1][changed[0].index(change_from)]
-                        change_from = change_to_old
+
+                    if change_from in changed[0] and change_to not in changed[1]:
+                        change_from = changed[1][changed[0].index(change_from)]
+                        exceptions[0].append(change_from)
+                        exceptions[1].append(change_to)
 
                     changed[0].append(change_from)
                     changed[1].append(change_to)
                 if change_from in row:
-                    change_indices = [j for j, x in enumerate(row) if x == change_from]
+                    change_indices = [j for j, x in enumerate(groups[m]) if x == change_from]
                     for c in change_indices:
                         groups[m][c] = change_to
+
+        double_exceptions = [[], []]
+        for ef, except_from in enumerate(exceptions[0]):
+            if except_from in exceptions[0][:ef]:
+                double_exceptions[0].append(except_from)
+                double_exceptions[1].append(exceptions[1][ef])
+
+                double_exceptions[0].append(exceptions[1][ef-1])
+                double_exceptions[1].append(exceptions[1][ef])
+
+        for de in range(len(double_exceptions[0])):
+            for m, row in enumerate(groups):
+                if double_exceptions[0][de] in row:
+                    print(double_exceptions[0][de])
+                    change_indices = [j for j, x in enumerate(groups[m]) if x == double_exceptions[0][de]]
+                    print(change_indices)
+                    for c in change_indices:
+                        groups[m][c] = double_exceptions[1][de]
+
         unique_groups = set(sum(groups, []))
 
         if plot:
@@ -407,8 +446,10 @@ class OptimizerClass:
             data = np.load(self.data_dir+'INCOMPLETE_data.npy', allow_pickle=True).item()
             os.remove(self.data_dir+'INCOMPLETE_data.npy')
 
-            Q_init_metric = self.CalculateMetric(self.init_mask)
-            min_metric = self.CalculateMetric(self.min_mask)
+            Q_init_metric, sens_init_metric = self.CalculateMetric(self.init_mask)
+            initial_metrics = [Q_init_metric, sens_init_metric]
+            Q_min_metric, sens_min_metric = self.CalculateMetric(self.min_mask, init_metrics=initial_metrics)
+            min_metric = Q_min_metric + sens_min_metric
 
             itr = data['Iterations'][-1]
             water_level = data['Water Levels'][-1]
@@ -422,13 +463,16 @@ class OptimizerClass:
             print('\033[36m\033[1mA total of {} iterations has been run so far\033[0m'.format(itr))
 
         else:
-            Q_init_metric = self.CalculateMetric(self.mask)
-            min_metric, water_level = 1, 1
+            Q_init_metric, sens_init_metric = self.CalculateMetric(self.mask)
+            initial_metrics = [Q_init_metric, sens_init_metric]
+            min_metric, water_level = self.corr_weight+self.sens_weight, self.corr_weight+self.sens_weight
             itr, stop_i = 0, 0
             saves = 0
 
             data = {}
-            data['Metrics'] = [1]
+            data['Metrics'] = [self.corr_weight+self.sens_weight]
+            data['Q Metrics'] = [self.corr_weight]
+            data['Sens Metrics'] = [self.sens_weight]
             data['Water Levels'] = [water_level]
             data['Iterations'] = [itr]
             data['Stopping Iterations'] = [stop_i]
@@ -477,17 +521,17 @@ class OptimizerClass:
 
                 self.mask = mask_temp.copy()
 
-                new_metric = self.CalculateMetric(self.mask)/Q_init_metric
+                new_Q_metric, new_sens_metric = self.CalculateMetric(self.mask, init_metrics=initial_metrics)
 
-                if new_metric < water_level:
+                if (new_Q_metric+new_sens_metric) < water_level:
                     print('\033[32mImprovement on itr: {}\033[0m'.format(itr))
                     stop_i = 0
                     self.last_imp_mask = self.mask.copy()
 
-                    water_level -= self.decay_rate * (water_level - new_metric)
+                    water_level -= self.decay_rate * (water_level - (new_Q_metric+new_sens_metric))
 
-                    if new_metric < min_metric:
-                        min_metric = new_metric
+                    if (new_Q_metric+new_sens_metric) < min_metric:
+                        min_metric = new_Q_metric+new_sens_metric
                         self.min_mask = self.mask.copy()
 
                 else:
@@ -496,7 +540,9 @@ class OptimizerClass:
                     self.mask = self.last_imp_mask.copy()
                 print('----------------------------------')
 
-                data['Metrics'].append(new_metric)
+                data['Metrics'].append(new_Q_metric+new_sens_metric)
+                data['Q Metrics'].append(new_Q_metric)
+                data['Sens Metrics'].append(new_sens_metric)
                 data['Water Levels'].append(water_level)
                 data['Iterations'].append(itr)
                 data['Stopping Iterations'].append(stop_i)
@@ -538,6 +584,7 @@ class OptimizerClass:
             np.save(self.data_dir+'final_data.npy', final_data)
 
             self.VisualizeWaterLevel()
+            self.VisualizeMetricsEvolution()
 
 
         except KeyboardInterrupt:
@@ -581,8 +628,8 @@ if __name__ == '__main__':
         '--detector_size', type=int, default=37,
         help=('Number of detector strips on each detector'))
     parser.add_argument(
-        '--fill_frac', type=float, default=0.5,
-        help=('The fraction of elements filled with masking elements'))
+        '--open_frac', type=float, default=0.5,
+        help=('The fraction of elements without masking elements'))
     parser.add_argument(
         '--verbose', '-v', action='store_true', default=False,
         help=('Prints all print outs if called'))
