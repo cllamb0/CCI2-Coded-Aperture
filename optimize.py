@@ -265,7 +265,7 @@ class OptimizerClass:
         ax2.legend(loc=1, fontsize=9)
         ax2.set_xlabel('# of Iterations')
         fig.tight_layout()
-        plt.savefig(self.plots_dir+'Plots/Metrics_Evolution.png',
+        plt.savefig(self.plots_dir+'Metrics_Evolution.png',
                     bbox_inches='tight', facecolor='white')
         plt.close()
 
