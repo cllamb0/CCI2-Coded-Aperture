@@ -14,7 +14,7 @@ from matplotlib.colors import from_levels_and_colors
 class OptimizerClass:
     def __init__(self,
                  method        = 'GreatDeluge',
-                 stopItr       = 500,
+                 stopItr       = 150,
                  data_fname    = None,
                  data_dir      = None,
                  plots_dir     = None,
@@ -24,7 +24,7 @@ class OptimizerClass:
                  save_ev       = 1000,
                  mask_size     = 46,
                  detector_size = 37,
-                 magnification = 3,
+                 magnification = 4,
                  open_frac     = 0.5,
                  hole_limit    = 80,
                  balanced      = True,
@@ -408,9 +408,7 @@ class OptimizerClass:
         for de in range(len(double_exceptions[0])):
             for m, row in enumerate(groups):
                 if double_exceptions[0][de] in row:
-                    print(double_exceptions[0][de])
                     change_indices = [j for j, x in enumerate(groups[m]) if x == double_exceptions[0][de]]
-                    print(change_indices)
                     for c in change_indices:
                         groups[m][c] = double_exceptions[1][de]
 
