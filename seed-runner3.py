@@ -1,0 +1,37 @@
+import os
+
+print('Now running seed 3')
+os.system('python optimize.py --open_frac 0.4 --hole_limit 17 --corr_weight 2 --sens_weight 1 --seed 3')
+print('Now running seed 6')
+os.system('python optimize.py --open_frac 0.45 --hole_limit 30 --corr_weight 2 --sens_weight 1 --seed 6')
+print('Now running seed 9')
+os.system('python optimize.py --open_frac 0.5 --hole_limit 50 --corr_weight 2 --sens_weight 1 --seed 9')
+print('Now running seed 12')
+os.system('python optimize.py --open_frac 0.55 --hole_limit 107 --corr_weight 2 --sens_weight 1 --seed 12')
+print('Now running seed 15')
+os.system('python optimize.py --open_frac 0.6 --hole_limit 300 --corr_weight 2 --sens_weight 1 --seed 15')
+
+
+print('Now running seed 18')
+os.system('python optimize.py --open_frac 0.4 --hole_limit 17 --corr_weight 1 --sens_weight 1 --seed 18')
+print('Now running seed 21')
+os.system('python optimize.py --open_frac 0.45 --hole_limit 30 --corr_weight 1 --sens_weight 1 --seed 21')
+print('Now running seed 24')
+os.system('python optimize.py --open_frac 0.5 --hole_limit 50 --corr_weight 1 --sens_weight 1 --seed 24')
+print('Now running seed 27')
+os.system('python optimize.py --open_frac 0.55 --hole_limit 107 --corr_weight 1 --sens_weight 1 --seed 27')
+print('Now running seed 30')
+os.system('python optimize.py --open_frac 0.6 --hole_limit 300 --corr_weight 1 --sens_weight 1 --seed 30')
+
+print('Now running seed 33')
+os.system('python optimize.py --open_frac 0.4 --hole_limit 17 --corr_weight 1 --sens_weight 2 --seed 33')
+print('Now running seed 36')
+os.system('python optimize.py --open_frac 0.45 --hole_limit 30 --corr_weight 1 --sens_weight 2 --seed 36')
+print('Now running seed 39')
+os.system('python optimize.py --open_frac 0.5 --hole_limit 50 --corr_weight 1 --sens_weight 2 --seed 39')
+print('Now running seed 42')
+os.system('python optimize.py --open_frac 0.55 --hole_limit 107 --corr_weight 1 --sens_weight 2 --seed 42')
+print('Now running seed 45')
+os.system('python optimize.py --open_frac 0.6 --hole_limit 300 --corr_weight 1 --sens_weight 2 --seed 45')
+
+print('ALL DONE')
