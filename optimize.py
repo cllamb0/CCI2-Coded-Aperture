@@ -36,12 +36,13 @@ class OptimizerClass:
                  transmission  = 0.05,
                  corr_weight   = 1,
                  sens_weight   = 1,
-                 dual_corr     = False):
+                 dual_corr     = False,
+                 initialize    = True):
         """
         Initializer for all class variables and intial
         """
 
-        assert method in ['GreatDeluge', 'JustRun']
+        assert method in ['GreatDeluge']
 
         if verbose:
             print('Initializing optimization configuration')
@@ -71,34 +72,38 @@ class OptimizerClass:
         self.corr_weight    = corr_weight
         self.sens_weight    = sens_weight
         self.dual_corr      = dual_corr
+        self.initialize     = initialize
 
-        try:
-            os.mkdir('Optimizations')
-        except:
-            pass
-
-        if data_dir is None:
-            data_dir = 'Optimizations/GD_ms_{}-of_{}-mag_{}-seed_{}-hl_{}-cw_{}-sw_{}/'.format(
-                        self.mask_size, str(self.open_frac).split('.')[1], self.magnification, self.seed, self.hole_limit, self.corr_weight, self.sens_weight)
+        if self.initialize:
             try:
-                os.mkdir(data_dir)
-                if self.verbose:
-                    print('Data directory created')
+                os.mkdir('Optimizations')
             except:
                 pass
-            self.data_dir = data_dir
 
-        if plots_dir is None:
-            plots_dir = data_dir+'Plots/'
-            try:
-                os.mkdir(plots_dir)
-                if self.verbose:
-                    print('Plots directory created')
-            except:
-                pass
-            self.plots_dir = plots_dir
+            if data_dir is None:
+                data_dir = 'Optimizations/GD_ms_{}-of_{}-mag_{}-seed_{}-hl_{}-cw_{}-sw_{}/'.format(
+                            self.mask_size, str(self.open_frac).split('.')[1], self.magnification, self.seed, self.hole_limit, self.corr_weight, self.sens_weight)
+                try:
+                    os.mkdir(data_dir)
+                    if self.verbose:
+                        print('Data directory created')
+                except:
+                    pass
+                self.data_dir = data_dir
 
-        self.cont = len([f for f in os.listdir(self.data_dir) if f.startswith('INCOMPLETE')]) != 0
+            if plots_dir is None:
+                plots_dir = data_dir+'Plots/'
+                try:
+                    os.mkdir(plots_dir)
+                    if self.verbose:
+                        print('Plots directory created')
+                except:
+                    pass
+                self.plots_dir = plots_dir
+
+            self.cont = len([f for f in os.listdir(self.data_dir) if f.startswith('INCOMPLETE')]) != 0
+        else:
+            self.cont = False
 
         np.random.seed(self.seed)
         if self.cont:
@@ -119,9 +124,13 @@ class OptimizerClass:
             os.remove(self.data_dir+'INCOMPLETE_last_imp_mask.txt')
 
         else:
-            self.CreateMask()
-            self.init_mask = self.mask.copy()
-            self.VisualizeMask(self.init_mask, 'Initial')
+            if self.initialize:
+                self.CreateMask()
+                self.init_mask = self.mask.copy()
+                self.VisualizeMask(self.init_mask, 'Initial')
+            else:
+                self.CreateMask(save=False)
+
 
         self.corr_size = signal.correlate2d(self.mask, self.mask[0:self.sample_size, 0:self.sample_size], mode='valid').shape[0]
 
@@ -194,10 +203,10 @@ class OptimizerClass:
                 if temp_flip:
                     self.balanced = True
 
+        self.mask = mask.copy()
+
         if save:
             np.savetxt(self.data_dir+'Initial_mask.txt', mask, fmt='%i')
-
-            self.mask = mask.copy()
 
     def VisualizeMask(self, plot_mask, sname):
         """
@@ -303,11 +312,13 @@ class OptimizerClass:
         if self.verbose:
             print('Loaded random state')
 
-    def CalculateMetric(self, mask, init_metrics=None):
+    def CalculateMetric(self, mask, init_metrics=None, return_F=False):
         # Cross correlation metric
         # init_metrics in the form: [init_corr, init_sens]
         if self.corr_weight != 0:
-            F_matrix = np.array([(signal.correlate2d(mask, mask[m:m+self.sample_size, n:n+self.sample_size], mode='valid')/(self.corr_size**2)).reshape(self.corr_size**2, ) for m in range(0, self.mask_size-self.sample_size+1) for n in range(0, self.mask_size-self.sample_size+1)])
+            F_matrix = np.array([(signal.correlate2d(mask, mask[m:m+self.sample_size, n:n+self.sample_size], mode='valid')/(self.sample_size**2)).reshape(self.corr_size**2, ) for m in range(0, self.mask_size-self.sample_size+1) for n in range(0, self.mask_size-self.sample_size+1)])
+            if return_F:
+                return F_matrix
             Q1 = (1/self.sample_size)*np.sum((np.diag(F_matrix)-self.open_frac)**4)
             np.fill_diagonal(F_matrix, self.open_frac**2)
             Q2 = (1/(self.sample_size**2-self.sample_size))*np.sum((F_matrix-self.open_frac**2)**4)
@@ -434,6 +445,12 @@ class OptimizerClass:
             alarm = [i for i, x in enumerate(group_counts[1]) if x >= self.hole_limit]
 
             return not alarm
+
+    def remagnify(self):
+        # Run this if the magnification has changed
+        self.sample_size = math.floor(self.detector_size/self.magnification)
+        self.sens_sample = np.ones((self.sample_size, self.sample_size))
+        self.corr_size = signal.correlate2d(self.mask, self.mask[0:self.sample_size, 0:self.sample_size], mode='valid').shape[0]
 
     def Optimize(self):
         if self.method == 'GreatDeluge':
