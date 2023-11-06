@@ -36,6 +36,7 @@ class OptimizerClass:
                  transmission  = 0.05,
                  corr_weight   = 1,
                  sens_weight   = 1,
+                 flat_weight   = 1,
                  dual_corr     = False,
                  initialize    = True):
         """
@@ -71,6 +72,7 @@ class OptimizerClass:
         self.transmission   = transmission
         self.corr_weight    = corr_weight
         self.sens_weight    = sens_weight
+        self.flat_weight    = flat_weight
         self.dual_corr      = dual_corr
         self.initialize     = initialize
 
@@ -266,13 +268,15 @@ class OptimizerClass:
     def VisualizeMetricsEvolution(self):
         final_data = np.load(self.data_dir+'final_data.npy', allow_pickle=True).item()
 
-        fig, [ax1, ax2] = plt.subplots(nrows=2, sharex=True, dpi=300, figsize=[10,7])
+        fig, [ax1, ax2, ax3] = plt.subplots(nrows=3, sharex=True, dpi=300, figsize=[10,7])
 
         ax1.plot(final_data['Iterations'], final_data['Q Metrics'], color='red', label='Cross Correlation')
         ax1.legend(loc=1, fontsize=9)
         ax2.plot(final_data['Iterations'], final_data['Sens Metrics'], color='green', label='Sensitivity')
         ax2.legend(loc=1, fontsize=9)
-        ax2.set_xlabel('# of Iterations')
+        ax3.plot(final_data['Iterations'], final_data['Flat Metrics'], color='blue', label='Flat Diff')
+        ax3.legend(loc=1, fontsize=9)
+        ax3.set_xlabel('# of Iterations')
         fig.tight_layout()
         plt.savefig(self.plots_dir+'Metrics_Evolution.png',
                     bbox_inches='tight', facecolor='white')
@@ -319,6 +323,7 @@ class OptimizerClass:
             F_matrix = np.array([(signal.correlate2d(mask, mask[m:m+self.sample_size, n:n+self.sample_size], mode='valid')/(self.sample_size**2)).reshape(self.corr_size**2, ) for m in range(0, self.mask_size-self.sample_size+1) for n in range(0, self.mask_size-self.sample_size+1)])
             if return_F:
                 return F_matrix
+            flat_diff = np.max(np.array([np.max(np.abs(np.delete(F_matrix[ind], ind) - (self.open_frac**2))) for ind in range(F_matrix.shape[0])]))
             Q1 = (1/self.sample_size)*np.sum((np.diag(F_matrix)-self.open_frac)**4)
             np.fill_diagonal(F_matrix, self.open_frac**2)
             Q2 = (1/(self.sample_size**2-self.sample_size))*np.sum((F_matrix-self.open_frac**2)**4)
@@ -336,9 +341,9 @@ class OptimizerClass:
         sens_Q = np.var(sensitivity_matrix)
 
         if init_metrics is None:
-            return Q, sens_Q
+            return Q, sens_Q, flat_diff
         else:
-            return self.corr_weight*(Q/init_metrics[0]), self.sens_weight*(sens_Q/init_metrics[1])
+            return self.corr_weight*(Q/init_metrics[0]), self.sens_weight*(sens_Q/init_metrics[1]), self.flat_weight*(flat_diff/init_metrics[2])
 
     def hole_size_checking(self, mask, plot=False, check_val=1):
         # Returns True if all holes are less than the limit and False otherwise
@@ -465,10 +470,10 @@ class OptimizerClass:
             data = np.load(self.data_dir+'INCOMPLETE_data.npy', allow_pickle=True).item()
             os.remove(self.data_dir+'INCOMPLETE_data.npy')
 
-            Q_init_metric, sens_init_metric = self.CalculateMetric(self.init_mask)
-            initial_metrics = [Q_init_metric, sens_init_metric]
-            Q_min_metric, sens_min_metric = self.CalculateMetric(self.min_mask, init_metrics=initial_metrics)
-            min_metric = Q_min_metric + sens_min_metric
+            Q_init_metric, sens_init_metric, flat_init_metric = self.CalculateMetric(self.init_mask)
+            initial_metrics = [Q_init_metric, sens_init_metric, flat_init_metric]
+            Q_min_metric, sens_min_metric, flat_min_metric = self.CalculateMetric(self.min_mask, init_metrics=initial_metrics)
+            min_metric = Q_min_metric + sens_min_metric + flat_min_metric
 
             itr = data['Iterations'][-1]
             water_level = data['Water Levels'][-1]
@@ -482,16 +487,17 @@ class OptimizerClass:
             print('\033[36m\033[1mA total of {} iterations has been run so far\033[0m'.format(itr))
 
         else:
-            Q_init_metric, sens_init_metric = self.CalculateMetric(self.mask)
-            initial_metrics = [Q_init_metric, sens_init_metric]
-            min_metric, water_level = self.corr_weight+self.sens_weight, self.corr_weight+self.sens_weight
+            Q_init_metric, sens_init_metric, flat_init_metric = self.CalculateMetric(self.mask)
+            initial_metrics = [Q_init_metric, sens_init_metric, flat_init_metric]
+            min_metric, water_level = self.corr_weight+self.sens_weight+self.flat_weight, self.corr_weight+self.sens_weight+self.flat_weight
             itr, stop_i = 0, 0
             saves = 0
 
             data = {}
-            data['Metrics'] = [self.corr_weight+self.sens_weight]
+            data['Metrics'] = [self.corr_weight+self.sens_weight+self.flat_weight]
             data['Q Metrics'] = [self.corr_weight]
             data['Sens Metrics'] = [self.sens_weight]
+            data['Flat Metrics'] = [self.flat_weight]
             data['Water Levels'] = [water_level]
             data['Iterations'] = [itr]
             data['Stopping Iterations'] = [stop_i]
@@ -540,7 +546,7 @@ class OptimizerClass:
 
                 self.mask = mask_temp.copy()
 
-                new_Q_metric, new_sens_metric = self.CalculateMetric(self.mask, init_metrics=initial_metrics)
+                new_Q_metric, new_sens_metric, new_flat_metric = self.CalculateMetric(self.mask, init_metrics=initial_metrics)
 
                 if (new_Q_metric+new_sens_metric) < water_level:
                     print('\033[32mImprovement on itr: {}\033[0m'.format(itr))
@@ -549,8 +555,8 @@ class OptimizerClass:
 
                     water_level -= self.decay_rate * (water_level - (new_Q_metric+new_sens_metric))
 
-                    if (new_Q_metric+new_sens_metric) < min_metric:
-                        min_metric = new_Q_metric+new_sens_metric
+                    if (new_Q_metric+new_sens_metric+new_flat_metric) < min_metric:
+                        min_metric = new_Q_metric+new_sens_metric+new_flat_metric
                         self.min_mask = self.mask.copy()
 
                 else:
@@ -562,6 +568,7 @@ class OptimizerClass:
                 data['Metrics'].append(new_Q_metric+new_sens_metric)
                 data['Q Metrics'].append(new_Q_metric)
                 data['Sens Metrics'].append(new_sens_metric)
+                data['Flat Metrics'].append(new_flat_metric)
                 data['Water Levels'].append(water_level)
                 data['Iterations'].append(itr)
                 data['Stopping Iterations'].append(stop_i)
@@ -653,7 +660,7 @@ if __name__ == '__main__':
         '--verbose', '-v', action='store_true', default=False,
         help=('Prints all print outs if called'))
     parser.add_argument(
-        '--magnification', type=float, default=3,
+        '--magnification', type=float, default=4,
         help=('Mask magnification'))
     parser.add_argument(
         '--hole_limit', type=int, default=80,
@@ -674,8 +681,11 @@ if __name__ == '__main__':
         '--corr_weight', type=float, default=1,
         help=('Weighting factor for cross correlation in metric'))
     parser.add_argument(
-        '--sens_weight', type=float, default=2,
+        '--sens_weight', type=float, default=1,
         help=('Weighting factor for sensitivity in metric'))
+    parser.add_argument(
+        '--flat_weight', type=float, default=1,
+        help=('Weighting factor for mean diff metric'))
     parser.add_argument(
         '--dual_corr', action='store_true', default=False,
         help=('Dual optimizes for magnification 2 and 4'))
