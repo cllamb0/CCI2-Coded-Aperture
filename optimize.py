@@ -323,7 +323,10 @@ class OptimizerClass:
             F_matrix = np.array([(signal.correlate2d(mask, mask[m:m+self.sample_size, n:n+self.sample_size], mode='valid')/(self.sample_size**2)).reshape(self.corr_size**2, ) for m in range(0, self.mask_size-self.sample_size+1) for n in range(0, self.mask_size-self.sample_size+1)])
             if return_F:
                 return F_matrix
-            flat_diff = np.max(np.array([np.max(np.abs(np.delete(F_matrix[ind], ind) - (self.open_frac**2))) for ind in range(F_matrix.shape[0])]))
+            if self.flat_weight != 0:
+                flat_diff = np.max(np.array([np.max(np.abs(np.delete(F_matrix[ind], ind) - (self.open_frac**2))) for ind in range(F_matrix.shape[0])]))
+            else:
+                flat_diff = 1
             Q1 = (1/self.sample_size)*np.sum((np.diag(F_matrix)-self.open_frac)**4)
             np.fill_diagonal(F_matrix, self.open_frac**2)
             Q2 = (1/(self.sample_size**2-self.sample_size))*np.sum((F_matrix-self.open_frac**2)**4)
