@@ -340,14 +340,16 @@ class OptimizerClass:
         else:
             return self.corr_weight*(Q/init_metrics[0]), self.sens_weight*(sens_Q/init_metrics[1])
 
-    def hole_size_checking(self, mask, plot=False):
+    def hole_size_checking(self, mask, plot=False, check_val=1):
         # Returns True if all holes are less than the limit and False otherwise
+        # check_val = 1 to check for size of holes (1 is a hole)
+        # check_val = 0 to check the size of mask element clumps (0 is a mask element)
         # -------- Hole Detection ------------
         row_holes, holes = [], []
         for m, row in enumerate(mask):
             temp_holes = []
             for n, col in enumerate(row):
-                if col == 1:
+                if col == check_val:
                     temp_holes.append(n)
             holes.append(temp_holes)
 
