@@ -2,6 +2,7 @@ import numpy as np
 import os
 import argparse
 import time
+import copy
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.patches import RegularPolygon
@@ -10,7 +11,7 @@ from distinctipy import distinctipy
 import math
 import scipy.signal as signal
 from matplotlib.colors import from_levels_and_colors
-from tetris_blocks import tetris_blocks, blokus_blocks, total_blocks, block_colors
+from tetris_blocks import tetris_blocks, blokus_blocks, total_blocks, block_colors, order_3d, text_place
 
 class OptimizerClass:
     def __init__(self,
@@ -19,7 +20,7 @@ class OptimizerClass:
                  data_fname    = None,
                  data_dir      = None,
                  plots_dir     = None,
-                 decay_rate    = 0.025,
+                 decay_rate    = 0.01,
                  cont          = False,
                  seed          = int(time.time()),
                  save_ev       = 1000,
@@ -46,7 +47,8 @@ class OptimizerClass:
                  blokus_blocks = blokus_blocks,
                  total_blocks  = total_blocks,
                  block_colors  = block_colors,
-                 static_blocks = True):
+                 static_blocks = False,
+                 label_blocks  = False):
         """
         Initializer for all class variables and intial
         """
@@ -92,6 +94,10 @@ class OptimizerClass:
         self.tetris_needed  = 0
         self.blokus_needed  = 0
         self.static_blocks  = static_blocks
+        self.label_blocks   = label_blocks
+
+        if not self.tetrisify:
+            self.frac_tetris = 0
 
         if self.initialize:
             try:
@@ -100,8 +106,9 @@ class OptimizerClass:
                 pass
 
             if data_dir is None:
-                data_dir = 'Optimizations/GD_ms_{}-of_{}-mag_{}-seed_{}-hl_{}-cw_{}-sw_{}/'.format(
-                            self.mask_size, str(self.open_frac).split('.')[1], self.magnification, self.seed, self.hole_limit, self.corr_weight, self.sens_weight)
+                data_dir = 'Optimizations/GD_ms_{}-of_{}-mag_{}-seed_{}-hl_{}-cw_{}-sw_{}-ft_{}/'.format(
+                            self.mask_size, str(self.open_frac).split('.')[1], self.magnification, self.seed, self.hole_limit, self.corr_weight, self.sens_weight,
+                            str(self.frac_tetris).split('.')[1])
                 try:
                     os.mkdir(data_dir)
                     if self.verbose:
@@ -154,10 +161,11 @@ class OptimizerClass:
             if self.initialize:
                 self.CreateMask()
                 self.init_mask = self.mask.copy()
-                self.VisualizeMask(self.init_mask, 'Initial')
-                if self.tetrisify:
-                    self.VisualizeTetrisMask(self.init_mask, 'Initial')
-                    self.VisualizeTetrisMask(self.init_mask, 'Initial_labelled', True)
+                if not self.tetrisify:
+                    self.VisualizeMask(self.init_mask, 'Initial')
+                else:
+                    self.VisualizeTetrisMask(self.init_mask, 'Initial', label=self.label_blocks)
+                    # self.VisualizeTetrisMask(self.init_mask, 'Initial_labelled', True)
             else:
                 self.CreateMask(save=False)
 
@@ -279,7 +287,7 @@ class OptimizerClass:
 
         self.mask = mask.copy()
         if self.tetrisify:
-            self.block_assigns = block_assigns
+            self.block_assigns = copy.deepcopy(block_assigns)
 
         if save:
             np.savetxt(self.data_dir+'Initial_mask.txt', mask, fmt='%i')
@@ -356,6 +364,27 @@ class OptimizerClass:
             self.tetris_needed, self.blokus_needed), y=1.01)
 
         plt.savefig(self.plots_dir+'{}_tetris_pieces_mask.png'.format(sname), bbox_inches='tight')
+
+        plt.close()
+
+    def createOrderSheet(self, _block_assigns):
+        block_quan = {b:list(_block_assigns.values()).count(b) for b in range(1,len(self.total_blocks)+1)}
+
+        # Summing mirror blocks
+        block_mirrors = ([5, 7], [12, 13], [14, 15], [16, 17], [19, 20], [22, 23], [24, 25])
+        for bm in block_mirrors:
+            block_quan[bm[0]] += block_quan[bm[1]]
+
+        plt.figure(figsize=(12,10), facecolor='white', dpi=200)
+        ax = plt.gca()
+        plt.imshow(order_3d)
+        ax.axis('off')
+        for key in text_place:
+            ax.text(text_place[key][0], text_place[key][1], 'x{}'.format(block_quan[key]), va='center', ha='center', weight='bold',
+                    bbox=dict(facecolor='white', alpha=0.95, edgecolor='black', boxstyle='round,pad=0.75'))
+        plt.title('Quantity of each block to order', fontsize=18, weight='bold')
+
+        plt.savefig(self.plots_dir+'tetris_order_sheet.png', bbox_inches='tight')
 
         plt.close()
 
@@ -611,6 +640,8 @@ class OptimizerClass:
                         temp_mask[c_ind[0]+row, c_ind[1]+col] = block_swap_ind
                 block_needed = False
 
+        block_ind = block_ind + 7*int(block_size == 5)
+
         return temp_mask.copy(), block_swap_ind, block_ind
 
     def remagnify(self):
@@ -666,8 +697,8 @@ class OptimizerClass:
             self.min_mask = self.mask.copy()
 
             if self.tetrisify:
-                self.last_imp_block_assigns = self.block_assigns.copy()
-                self.min_block_assigns = self.block_assigns.copy()
+                self.last_imp_block_assigns = copy.deepcopy(self.block_assigns)
+                self.min_block_assigns = copy.deepcopy(self.block_assigns)
 
         try:
             while (stop_i < self.stopItr):
@@ -675,8 +706,8 @@ class OptimizerClass:
 
                 hole_checking = True
                 while hole_checking:
-                    if tetrisify:
-                        mask_temp, block_ele_swapped, block_swapped = swap_tetris()
+                    if self.tetrisify:
+                        mask_temp, block_ele_swapped, block_swapped = self.swap_tetris()
                     else:
                         if not self.sectioning:
                             mask_temp = self.mask.copy()
@@ -722,7 +753,7 @@ class OptimizerClass:
                     stop_i = 0
                     self.last_imp_mask = self.mask.copy()
                     if self.tetrisify:
-                        self.last_imp_block_assigns = self.block_assigns.copy()
+                        self.last_imp_block_assigns = copy.deepcopy(self.block_assigns)
 
                     water_level -= self.decay_rate * (water_level - (new_Q_metric+new_sens_metric))
 
@@ -730,12 +761,14 @@ class OptimizerClass:
                         min_metric = new_Q_metric+new_sens_metric+new_flat_metric
                         self.min_mask = self.mask.copy()
                         if self.tetrisify:
-                            self.min_block_assigns = self.block_assigns.copy()
+                            self.min_block_assigns = copy.deepcopy(self.block_assigns)
 
                 else:
                     stop_i += 1
                     print('\033[31mNo improvement on itr: {}\nIt has been {} iterations with no improvement\033[0m'.format(itr, stop_i))
                     self.mask = self.last_imp_mask.copy()
+                    if self.tetrisify:
+                        self.block_assigns = copy.deepcopy(self.last_imp_block_assigns)
                 print('----------------------------------')
 
                 data['Metrics'].append(new_Q_metric+new_sens_metric)
@@ -760,14 +793,18 @@ class OptimizerClass:
                         self.VisualizeMask(self.min_mask, '{}-{}_best_current'.format(self.save_ev*saves, self.save_ev*(saves+1)-1))
                     else:
                         self.VisualizeTetrisMask(self.min_mask, '{}-{}_best_current'.format(self.save_ev*saves, self.save_ev*(saves+1)-1),
-                                                _block_assigns=self.min_block_assigns)
+                                                _block_assigns=self.min_block_assigns, label=self.label_blocks)
                     saves += 1
                     del temp_data
 
 
 
             np.savetxt(self.data_dir+'final_mask.txt', self.min_mask, fmt='%i')
-            self.VisualizeMask(self.min_mask, 'Final')
+            if not self.tetrisify:
+                self.VisualizeMask(self.min_mask, 'Final')
+            else:
+                self.VisualizeTetrisMask(self.min_mask, 'Final', _block_assigns=self.min_block_assigns, label=self.label_blocks)
+                self.createOrderSheet(self.min_block_assigns)
             np.save(self.data_dir+'data_{}-{}.npy'.format(self.save_ev*saves, itr), data)
 
             if self.tetrisify:
@@ -775,7 +812,7 @@ class OptimizerClass:
 
             final_data, files_list = {}, []
             for f in os.listdir(self.data_dir):
-                if f.endswith('.npy') and not f.endswith('data.npy'):
+                if f.endswith('.npy') and not f.endswith('data.npy') and not f.endswith('assigns.npy'):
                     files_list.append([int(f.split('_')[1].split('-')[0]), f])
             files_list.sort()
 
@@ -880,8 +917,11 @@ if __name__ == '__main__':
         '--frac_tetris', type=float, default=0.5,
         help=('Fraction of tetrisified mask made out of 4 element blocks'))
     parser.add_argument(
-        '--static_blocks', action='store_false', default=True,
+        '--static_blocks', action='store_true', default=False,
         help=('Whether to use the same list of blocks in tetrisifying'))
+    parser.add_argument(
+        '--label_blocks', action='store_true', default=False,
+        help=('Whether to add block type numbering to tetris block plots'))
 
 
     args = parser.parse_args()
