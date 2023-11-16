@@ -820,7 +820,7 @@ if __name__ == '__main__':
         '--method', '-m', type=str, default='GreatDeluge',
         help=('Name of optimization method to use, either "GreatDeluge" or "JustRun"'))
     parser.add_argument(
-        '--stopItr', type=int, default=150,
+        '--stopItr', type=int, default=200,
         help=('Number of iterations to run or run without improvement'))
     parser.add_argument(
         '--save_ev', type=int, default=2500,
