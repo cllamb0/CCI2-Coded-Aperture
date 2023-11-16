@@ -10,6 +10,7 @@ from distinctipy import distinctipy
 import math
 import scipy.signal as signal
 from matplotlib.colors import from_levels_and_colors
+from tetris_blocks import tetris_blocks, blokus_blocks, total_blocks, block_colors
 
 class OptimizerClass:
     def __init__(self,
@@ -38,7 +39,14 @@ class OptimizerClass:
                  sens_weight   = 1,
                  flat_weight   = 1,
                  dual_corr     = False,
-                 initialize    = True):
+                 initialize    = True,
+                 tetrisify     = False,
+                 frac_tetris   = 0.5,
+                 tetris_blocks = tetris_blocks,
+                 blokus_blocks = blokus_blocks,
+                 total_blocks  = total_blocks,
+                 block_colors  = block_colors,
+                 static_blocks = True):
         """
         Initializer for all class variables and intial
         """
@@ -75,6 +83,15 @@ class OptimizerClass:
         self.flat_weight    = flat_weight
         self.dual_corr      = dual_corr
         self.initialize     = initialize
+        self.tetrisify      = tetrisify # For now, tetrisifying the mask will ignore sectioning
+        self.frac_tetris    = frac_tetris
+        self.tetris_blocks  = tetris_blocks
+        self.blokus_blocks  = blokus_blocks
+        self.block_colors   = block_colors
+        self.total_blocks   = total_blocks
+        self.tetris_needed  = 0
+        self.blokus_needed  = 0
+        self.static_blocks  = static_blocks
 
         if self.initialize:
             try:
@@ -125,11 +142,22 @@ class OptimizerClass:
             os.remove(self.data_dir+'INCOMPLETE_min_mask.txt')
             os.remove(self.data_dir+'INCOMPLETE_last_imp_mask.txt')
 
+            if self.tetrisify:
+                self.block_assigns = np.load(self.data_dir+'INCOMPLETE_block_assigns.npy', allow_pickle=True).item()
+                self.min_block_assigns = np.load(self.data_dir+'INCOMPLETE_min_block_assigns.npy', allow_pickle=True).item()
+                self.last_imp_block_assigns = np.load(self.data_dir+'INCOMPLETE_last_imp_block_assigns.npy', allow_pickle=True).item()
+
+                os.remove(self.data_dir+'INCOMPLETE_block_assigns.npy')
+                os.remove(self.data_dir+'INCOMPLETE_min_block_assigns.npy')
+                os.remove(self.data_dir+'INCOMPLETE_last_imp_block_assigns.npy')
         else:
             if self.initialize:
                 self.CreateMask()
                 self.init_mask = self.mask.copy()
                 self.VisualizeMask(self.init_mask, 'Initial')
+                if self.tetrisify:
+                    self.VisualizeTetrisMask(self.init_mask, 'Initial')
+                    self.VisualizeTetrisMask(self.init_mask, 'Initial_labelled', True)
             else:
                 self.CreateMask(save=False)
 
@@ -147,54 +175,98 @@ class OptimizerClass:
 
         hole_checking = True
         while hole_checking:
-            if not self.sectioning:
-                mask = np.zeros(self.mask_size**2)
-                num_open = math.ceil(self.open_frac * (self.mask_size**2))
+            if self.tetrisify:
+                mask = np.zeros((self.mask_size, self.mask_size))
+                block_assigns = {0: 0}
 
-                mask[np.random.choice(mask.size, num_open, replace=False)] = 1
+                if self.frac_tetris == 1:
+                    self.tetris_needed = round(((1-self.open_frac)*self.mask_size**2)/4)
+                elif self.frac_tetris == 0:
+                    self.blokus_needed = round(((1-self.open_frac)*self.mask_size**2)/5)
+                else:
+                    self.tetris_needed, self.blokus_needed = np.linalg.solve(np.array([[4, 5], [1/self.frac_tetris, -1/(1-self.frac_tetris)]]),
+                                                               np.array([[(1-self.open_frac)*self.mask_size**2], [0]])).reshape(2,).astype(int)
+                    # Adjusting the tetris fraction by a minor amount to achieve near zero filling error
+                    element_error = round(((1-self.open_frac)*self.mask_size**2) - (4*self.tetris_needed + 5*self.blokus_needed))
+                    self.blokus_needed += element_error % 4
+                    self.tetris_needed += (element_error // 4) - (element_error % 4)
 
-                mask = mask.reshape(self.mask_size, self.mask_size)
+                    self.frac_tetris = self.tetris_needed / (self.tetris_needed + self.blokus_needed)
+
+                # Placing tetris blocks into place
+                for block_num in range(self.tetris_needed):
+                    block_needed = True
+                    while block_needed:
+                        chosen_block, block_ind = self.choose_block(4, True)
+                        c_ind = np.random.randint((np.array(mask.shape) - np.array(chosen_block.shape) + 1))
+                        if self.valid_block_placement(mask, chosen_block, c_ind):
+                            for row, col in np.ndindex(chosen_block.shape):
+                                if chosen_block[row, col] == 1:
+                                    mask[c_ind[0]+row, c_ind[1]+col] = block_num+1
+                                    block_assigns[block_num+1] = block_ind+1
+                            block_needed = False
+
+                # Placing blokus blocks into place
+                for block_num_blok in range(self.blokus_needed):
+                    block_needed = True
+                    while block_needed:
+                        chosen_block, block_ind = self.choose_block(5, True)
+                        c_ind = np.random.randint((np.array(mask.shape) - np.array(chosen_block.shape) + 1))
+                        if self.valid_block_placement(mask, chosen_block, c_ind):
+                            for row, col in np.ndindex(chosen_block.shape):
+                                if chosen_block[row, col] == 1:
+                                    mask[c_ind[0]+row, c_ind[1]+col] = block_num+block_num_blok+2
+                                    block_assigns[block_num+block_num_blok+2] = block_ind+8
+                            block_needed = False
             else:
-                num_open = math.ceil(self.open_frac * (self.section_size**2))
+                if not self.sectioning:
+                    mask = np.zeros(self.mask_size**2)
+                    num_open = math.ceil(self.open_frac * (self.mask_size**2))
 
-                group_indices = []
-                for col_section in range(math.floor(self.mask_size/self.section_size)):
-                    temp_column = np.zeros(self.section_size**2)
-                    temp_column[np.random.choice(temp_column.size, num_open, replace=False)] = 1
-                    temp_column = temp_column.reshape(self.section_size, self.section_size)
-                    group_indices.append([[0, col_section*self.section_size],
-                                              [self.section_size, (col_section+1)*self.section_size]])
-                    for row_section in range(math.floor(self.mask_size/self.section_size)-1):
-                        temp_mask = np.zeros(self.section_size**2)
-                        temp_mask[np.random.choice(temp_mask.size, num_open, replace=False)] = 1
-                        temp_mask = temp_mask.reshape(self.section_size, self.section_size)
-                        temp_column = np.concatenate((temp_column, temp_mask), axis=0)
-                        group_indices.append([[(row_section+1)*self.section_size, (col_section)*self.section_size],
-                                              [(row_section+2)*self.section_size, (col_section+1)*self.section_size]])
-                    if col_section == 0:
-                        mask = np.copy(temp_column)
-                    else:
-                        mask = np.concatenate((mask, temp_column), axis=1)
+                    mask[np.random.choice(mask.size, num_open, replace=False)] = 1
 
-                if self.mask_size % self.section_size != 0:
-                    fix_column = np.zeros((self.mask_size%self.section_size)*(mask.shape[0]))
-                    col_fix_open = math.floor(self.open_frac * (fix_column.size))
-                    fix_column[np.random.choice(fix_column.size, col_fix_open, replace=False)] = 1
-                    fix_column = fix_column.reshape((mask.shape[0]), (self.mask_size%self.section_size))
+                    mask = mask.reshape(self.mask_size, self.mask_size)
+                else:
+                    num_open = math.ceil(self.open_frac * (self.section_size**2))
 
-                    mask = np.concatenate((mask, fix_column), axis=1)
-                    group_indices.append([[0, mask.shape[0]], list(mask.shape)])
+                    group_indices = []
+                    for col_section in range(math.floor(self.mask_size/self.section_size)):
+                        temp_column = np.zeros(self.section_size**2)
+                        temp_column[np.random.choice(temp_column.size, num_open, replace=False)] = 1
+                        temp_column = temp_column.reshape(self.section_size, self.section_size)
+                        group_indices.append([[0, col_section*self.section_size],
+                                                  [self.section_size, (col_section+1)*self.section_size]])
+                        for row_section in range(math.floor(self.mask_size/self.section_size)-1):
+                            temp_mask = np.zeros(self.section_size**2)
+                            temp_mask[np.random.choice(temp_mask.size, num_open, replace=False)] = 1
+                            temp_mask = temp_mask.reshape(self.section_size, self.section_size)
+                            temp_column = np.concatenate((temp_column, temp_mask), axis=0)
+                            group_indices.append([[(row_section+1)*self.section_size, (col_section)*self.section_size],
+                                                  [(row_section+2)*self.section_size, (col_section+1)*self.section_size]])
+                        if col_section == 0:
+                            mask = np.copy(temp_column)
+                        else:
+                            mask = np.concatenate((mask, temp_column), axis=1)
 
-                    fix_row = np.zeros((self.mask_size%self.section_size)*(mask.shape[1]))
-                    row_fix_open = math.floor(self.open_frac * (fix_row.size))
-                    fix_row[np.random.choice(fix_row.size, row_fix_open, replace=False)] = 1
-                    fix_row = fix_row.reshape((self.mask_size%self.section_size), (mask.shape[1]))
+                    if self.mask_size % self.section_size != 0:
+                        fix_column = np.zeros((self.mask_size%self.section_size)*(mask.shape[0]))
+                        col_fix_open = math.floor(self.open_frac * (fix_column.size))
+                        fix_column[np.random.choice(fix_column.size, col_fix_open, replace=False)] = 1
+                        fix_column = fix_column.reshape((mask.shape[0]), (self.mask_size%self.section_size))
 
-                    sms = mask.shape[0]
-                    mask = np.concatenate((mask, fix_row), axis=0)
-                    group_indices.append([[sms, 0], list(mask.shape)])
+                        mask = np.concatenate((mask, fix_column), axis=1)
+                        group_indices.append([[0, mask.shape[0]], list(mask.shape)])
 
-                self.group_indices = group_indices
+                        fix_row = np.zeros((self.mask_size%self.section_size)*(mask.shape[1]))
+                        row_fix_open = math.floor(self.open_frac * (fix_row.size))
+                        fix_row[np.random.choice(fix_row.size, row_fix_open, replace=False)] = 1
+                        fix_row = fix_row.reshape((self.mask_size%self.section_size), (mask.shape[1]))
+
+                        sms = mask.shape[0]
+                        mask = np.concatenate((mask, fix_row), axis=0)
+                        group_indices.append([[sms, 0], list(mask.shape)])
+
+                    self.group_indices = group_indices
 
             if self.balanced:
                 if self.hole_size_checking(mask):
@@ -206,6 +278,8 @@ class OptimizerClass:
                     self.balanced = True
 
         self.mask = mask.copy()
+        if self.tetrisify:
+            self.block_assigns = block_assigns
 
         if save:
             np.savetxt(self.data_dir+'Initial_mask.txt', mask, fmt='%i')
@@ -214,7 +288,10 @@ class OptimizerClass:
         """
         Plotter for way of visualizing a mask in a clean looking way
         """
-        plot_mask = plot_mask.reshape(self.mask_size, self.mask_size)
+        if self.tetrisify:
+            plot_mask = np.where(plot_mask == 0, 1, 0)
+        else:
+            plot_mask = plot_mask.reshape(self.mask_size, self.mask_size)
 
         cmap = mpl.cm.get_cmap("binary").copy()
         cmap.set_bad(color='black')
@@ -250,6 +327,37 @@ class OptimizerClass:
         plt.close()
 
         print('Saved {} aperture mask image'.format(sname))
+
+    def VisualizeTetrisMask(self, plot_mask, sname, label=False, _block_assigns=None):
+        """
+        Plotter for a tetrisified mask
+        Assumes the defined block_assigns exists
+        """
+        if _block_assigns is None:
+            _block_assigns = self.block_assigns
+
+        mask_3d = np.ndarray(shape=(plot_mask.shape[0], plot_mask.shape[1], 3), dtype=int)
+        for i in range(plot_mask.shape[0]):
+            for j in range(plot_mask.shape[1]):
+                mask_3d[i][j] = self.block_colors[_block_assigns[plot_mask[i][j]]]
+
+        plt.figure(figsize=(7,7), dpi=200, facecolor='white')
+        plt.imshow(mask_3d)
+        ax = plt.gca()
+
+        if label:
+            for i in range(0, plot_mask.shape[0]):
+                for j in range(0, plot_mask.shape[1]):
+                    c = _block_assigns[plot_mask[j,i]]
+                    if c == 0:
+                        continue
+                    ax.text(i, j, str(int(c)), va='center', ha='center', fontsize=(46*5)/self.mask_size)
+        plt.title('{} blocks of 4 elements\n{} blocks of 5 elements'.format(
+            self.tetris_needed, self.blokus_needed), y=1.01)
+
+        plt.savefig(self.plots_dir+'{}_tetris_pieces_mask.png'.format(sname), bbox_inches='tight')
+
+        plt.close()
 
     def VisualizeWaterLevel(self):
         final_data = np.load(self.data_dir+'final_data.npy', allow_pickle=True).item()
@@ -319,6 +427,10 @@ class OptimizerClass:
     def CalculateMetric(self, mask, init_metrics=None, return_F=False):
         # Cross correlation metric
         # init_metrics in the form: [init_corr, init_sens]
+        if self.tetrisify:
+            # Temporarily converting a tetris mask to the standard format
+            mask = np.where(mask == 0, 1, 0)
+
         if self.corr_weight != 0:
             F_matrix = np.array([(signal.correlate2d(mask, mask[m:m+self.sample_size, n:n+self.sample_size], mode='valid')/(self.sample_size**2)).reshape(self.corr_size**2, ) for m in range(0, self.mask_size-self.sample_size+1) for n in range(0, self.mask_size-self.sample_size+1)])
             if return_F:
@@ -352,6 +464,9 @@ class OptimizerClass:
         # Returns True if all holes are less than the limit and False otherwise
         # check_val = 1 to check for size of holes (1 is a hole)
         # check_val = 0 to check the size of mask element clumps (0 is a mask element)
+        if self.tetrisify:
+            mask = np.where(mask == 0, 1, 0)
+
         # -------- Hole Detection ------------
         row_holes, holes = [], []
         for m, row in enumerate(mask):
@@ -456,6 +571,48 @@ class OptimizerClass:
 
             return not alarm
 
+    def choose_block(self, bsize, invert=False):
+        if bsize == 4:
+            ct = np.random.randint(len(self.tetris_blocks))
+            block = np.rot90(self.tetris_blocks[ct], np.random.randint(4))
+        elif bsize == 5:
+            ct = np.random.randint(len(self.blokus_blocks))
+            block = np.rot90(self.blokus_blocks[ct], np.random.randint(4))
+        if invert:
+            return (~block.astype(bool)).astype(int), ct
+        return block, ct
+
+    def valid_block_placement(self, mask, block, ul_corner):
+        if (np.where(mask[ul_corner[0]:ul_corner[0]+block.shape[0],
+                         ul_corner[1]:ul_corner[1]+block.shape[1]] == 0, 0, 1) & block).astype(bool).any():
+            return False
+        return True
+
+    def swap_tetris(self):
+        # test is the replacement for self for now
+        block_swap_ind = np.random.randint(1, list(self.block_assigns.keys())[-1]+1)
+        temp_mask = np.where(self.mask == block_swap_ind, 0, self.mask)
+
+        block_size = 4 + int(self.block_assigns[block_swap_ind]-1 > 6)
+        if self.static_blocks:
+            block_2_place = (~(self.total_blocks[self.block_assigns[block_swap_ind]-1]).astype(bool)).astype(int)
+            block_ind = self.block_assigns[block_swap_ind]-1
+
+        block_needed = True
+        while block_needed:
+            if self.static_blocks:
+                block_2_place = np.rot90(block_2_place, np.random.randint(4))
+            else:
+                block_2_place, block_ind = self.choose_block(block_size, True)
+            c_ind = np.random.randint((np.array(temp_mask.shape) - np.array(block_2_place.shape) + 1))
+            if self.valid_block_placement(temp_mask, block_2_place, c_ind):
+                for row, col in np.ndindex(block_2_place.shape):
+                    if block_2_place[row, col] == 1:
+                        temp_mask[c_ind[0]+row, c_ind[1]+col] = block_swap_ind
+                block_needed = False
+
+        return temp_mask.copy(), block_swap_ind, block_ind
+
     def remagnify(self):
         # Run this if the magnification has changed
         self.sample_size = math.floor(self.detector_size/self.magnification)
@@ -508,38 +665,45 @@ class OptimizerClass:
             self.last_imp_mask = self.mask.copy()
             self.min_mask = self.mask.copy()
 
+            if self.tetrisify:
+                self.last_imp_block_assigns = self.block_assigns.copy()
+                self.min_block_assigns = self.block_assigns.copy()
+
         try:
             while (stop_i < self.stopItr):
                 itr += 1
 
                 hole_checking = True
                 while hole_checking:
-                    if not self.sectioning:
-                        mask_temp = self.mask.copy()
-                        mask_temp = self.mask.reshape(self.mask_size**2, )
-                        rand_pop   = np.random.choice(np.where(mask_temp > 0)[0]) # Random populated position
-                        rand_empty = np.random.choice(np.where(mask_temp < 1)[0]) # Random empty position
-                        mask_temp[rand_pop] = 0
-                        mask_temp[rand_empty] = 1
-                        mask_temp = mask_temp.reshape(self.mask_size, self.mask_size)
+                    if tetrisify:
+                        mask_temp, block_ele_swapped, block_swapped = swap_tetris()
                     else:
-                        group_pick = np.random.choice(list(np.arange(len(self.group_indices))))
+                        if not self.sectioning:
+                            mask_temp = self.mask.copy()
+                            mask_temp = self.mask.reshape(self.mask_size**2, )
+                            rand_pop   = np.random.choice(np.where(mask_temp > 0)[0]) # Random populated position
+                            rand_empty = np.random.choice(np.where(mask_temp < 1)[0]) # Random empty position
+                            mask_temp[rand_pop] = 0
+                            mask_temp[rand_empty] = 1
+                            mask_temp = mask_temp.reshape(self.mask_size, self.mask_size)
+                        else:
+                            group_pick = np.random.choice(list(np.arange(len(self.group_indices))))
 
-                        mask_temp = self.mask.copy()
-                        chosen_group = mask_temp[self.group_indices[group_pick][0][0]:self.group_indices[group_pick][1][0],
-                                                 self.group_indices[group_pick][0][1]:self.group_indices[group_pick][1][1]]
-                        original_shape = chosen_group.shape
-                        chosen_group = chosen_group.reshape(chosen_group.size, )
+                            mask_temp = self.mask.copy()
+                            chosen_group = mask_temp[self.group_indices[group_pick][0][0]:self.group_indices[group_pick][1][0],
+                                                     self.group_indices[group_pick][0][1]:self.group_indices[group_pick][1][1]]
+                            original_shape = chosen_group.shape
+                            chosen_group = chosen_group.reshape(chosen_group.size, )
 
-                        rand_pop   = np.random.choice(np.where(chosen_group > 0)[0]) # Random populated position
-                        rand_empty = np.random.choice(np.where(chosen_group < 1)[0]) # Random empty position
-                        chosen_group[rand_pop] = 0
-                        chosen_group[rand_empty] = 1
+                            rand_pop   = np.random.choice(np.where(chosen_group > 0)[0]) # Random populated position
+                            rand_empty = np.random.choice(np.where(chosen_group < 1)[0]) # Random empty position
+                            chosen_group[rand_pop] = 0
+                            chosen_group[rand_empty] = 1
 
-                        chosen_group = chosen_group.reshape(original_shape)
+                            chosen_group = chosen_group.reshape(original_shape)
 
-                        mask_temp[self.group_indices[group_pick][0][0]:self.group_indices[group_pick][1][0],
-                                  self.group_indices[group_pick][0][1]:self.group_indices[group_pick][1][1]] = chosen_group
+                            mask_temp[self.group_indices[group_pick][0][0]:self.group_indices[group_pick][1][0],
+                                      self.group_indices[group_pick][0][1]:self.group_indices[group_pick][1][1]] = chosen_group
 
                     if not self.balanced:
                         hole_checking = False
@@ -548,6 +712,8 @@ class OptimizerClass:
                             hole_checking = False
 
                 self.mask = mask_temp.copy()
+                if self.tetrisify:
+                    self.block_assigns[block_ele_swapped] = block_swapped+1
 
                 new_Q_metric, new_sens_metric, new_flat_metric = self.CalculateMetric(self.mask, init_metrics=initial_metrics)
 
@@ -555,12 +721,16 @@ class OptimizerClass:
                     print('\033[32mImprovement on itr: {}\033[0m'.format(itr))
                     stop_i = 0
                     self.last_imp_mask = self.mask.copy()
+                    if self.tetrisify:
+                        self.last_imp_block_assigns = self.block_assigns.copy()
 
                     water_level -= self.decay_rate * (water_level - (new_Q_metric+new_sens_metric))
 
                     if (new_Q_metric+new_sens_metric+new_flat_metric) < min_metric:
                         min_metric = new_Q_metric+new_sens_metric+new_flat_metric
                         self.min_mask = self.mask.copy()
+                        if self.tetrisify:
+                            self.min_block_assigns = self.block_assigns.copy()
 
                 else:
                     stop_i += 1
@@ -583,11 +753,14 @@ class OptimizerClass:
                         data[key] = [data[key][-1]]
                     np.save(self.data_dir+'data_{}-{}.npy'.format(self.save_ev*saves, self.save_ev*(saves+1)-1), temp_data)
                     print('----------------------------------')
-                    print('----------------------------------')
                     print('Completed {} iterations! Creating a save point now'.format(self.save_ev*(saves+1)))
                     print('----------------------------------')
                     print('----------------------------------')
-                    self.VisualizeMask(self.min_mask, '{}-{}_best_current'.format(self.save_ev*saves, self.save_ev*(saves+1)-1))
+                    if not self.tetrisify:
+                        self.VisualizeMask(self.min_mask, '{}-{}_best_current'.format(self.save_ev*saves, self.save_ev*(saves+1)-1))
+                    else:
+                        self.VisualizeTetrisMask(self.min_mask, '{}-{}_best_current'.format(self.save_ev*saves, self.save_ev*(saves+1)-1),
+                                                _block_assigns=self.min_block_assigns)
                     saves += 1
                     del temp_data
 
@@ -596,6 +769,9 @@ class OptimizerClass:
             np.savetxt(self.data_dir+'final_mask.txt', self.min_mask, fmt='%i')
             self.VisualizeMask(self.min_mask, 'Final')
             np.save(self.data_dir+'data_{}-{}.npy'.format(self.save_ev*saves, itr), data)
+
+            if self.tetrisify:
+                np.save(self.data_dir+'final_block_assigns.npy', self.min_block_assigns)
 
             final_data, files_list = {}, []
             for f in os.listdir(self.data_dir):
@@ -625,6 +801,11 @@ class OptimizerClass:
             np.savetxt(self.data_dir+'INCOMPLETE_mask.txt', self.mask, fmt='%i')
             np.savetxt(self.data_dir+'INCOMPLETE_min_mask.txt', self.min_mask, fmt='%i')
             np.savetxt(self.data_dir+'INCOMPLETE_last_imp_mask.txt', self.last_imp_mask, fmt='%i')
+
+            if self.tetrisify:
+                np.save(self.data_dir+'INCOMPLETE_block_assigns.npy', self.block_assigns)
+                np.save(self.data_dir+'INCOMPLETE_min_block_assigns.npy', self.min_block_assigns)
+                np.save(self.data_dir+'INCOMPLETE_last_imp_block_assigns.npy', self.last_imp_block_assigns)
 
             np.save(self.data_dir+'INCOMPLETE_data.npy', data)
 
@@ -692,6 +873,15 @@ if __name__ == '__main__':
     parser.add_argument(
         '--dual_corr', action='store_true', default=False,
         help=('Dual optimizes for magnification 2 and 4'))
+    parser.add_argument(
+        '--tetrisify', action='store_true', default=False,
+        help=('Whether to make mask out of tetris-like pieces or not'))
+    parser.add_argument(
+        '--frac_tetris', type=float, default=0.5,
+        help=('Fraction of tetrisified mask made out of 4 element blocks'))
+    parser.add_argument(
+        '--static_blocks', action='store_false', default=True,
+        help=('Whether to use the same list of blocks in tetrisifying'))
 
 
     args = parser.parse_args()
