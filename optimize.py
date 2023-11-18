@@ -44,7 +44,7 @@ class OptimizerClass:
                  flat_weight   = 1,
                  dual_corr     = False,
                  initialize    = True,
-                 tetrisify     = False,
+                 tetrisify     = True,
                  frac_tetris   = 0.5,
                  tetris_blocks = tetris_blocks,
                  blokus_blocks = blokus_blocks,
@@ -109,9 +109,12 @@ class OptimizerClass:
                 pass
 
             if data_dir is None:
+                if not self.tetrisify:
+                    ft = 0
+                else:
+                    ft = self.frac_tetris
                 data_dir = 'Optimizations/GD_ms_{}-of_{}-mag_{}-seed_{}-hl_{}-cw_{}-sw_{}-ft_{}/'.format(
-                            self.mask_size, str(self.open_frac).split('.')[1], self.magnification, self.seed, self.hole_limit, self.corr_weight, self.sens_weight,
-                            str(self.frac_tetris).split('.')[1])
+                            self.mask_size, str(self.open_frac).split('.')[1], self.magnification, self.seed, self.hole_limit, self.corr_weight, self.sens_weight, ft)
                 try:
                     os.mkdir(data_dir)
                     if self.verbose:
@@ -914,7 +917,7 @@ if __name__ == '__main__':
         '--dual_corr', action='store_true', default=False,
         help=('Dual optimizes for magnification 2 and 4'))
     parser.add_argument(
-        '--tetrisify', action='store_true', default=False,
+        '--tetrisify', action='store_false', default=True,
         help=('Whether to make mask out of tetris-like pieces or not'))
     parser.add_argument(
         '--frac_tetris', type=float, default=0.5,
