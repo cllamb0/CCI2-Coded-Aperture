@@ -7,7 +7,10 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.patches import RegularPolygon
 from matplotlib.collections import PatchCollection
-from distinctipy import distinctipy
+try:
+    from distinctipy import distinctipy
+except:
+    pass
 import math
 import scipy.signal as signal
 from matplotlib.colors import from_levels_and_colors
