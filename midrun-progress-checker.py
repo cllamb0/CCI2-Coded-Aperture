@@ -39,12 +39,15 @@ plt.savefig(data_dir+'Plots/MIDRUN_Water_Level_Evolution.png',
 plt.close()
 print('Saved midrun water level evolution plot')
 
-fig, [ax1, ax2] = plt.subplots(nrows=2, sharex=True, dpi=300, figsize=[10,7])
+fig, [ax1, ax2, ax3] = plt.subplots(nrows=3, sharex=True, dpi=300, figsize=[10,7])
+
 ax1.plot(final_data['Iterations'], final_data['Q Metrics'], color='red', label='Cross Correlation')
 ax1.legend(loc=1, fontsize=9)
 ax2.plot(final_data['Iterations'], final_data['Sens Metrics'], color='green', label='Sensitivity')
 ax2.legend(loc=1, fontsize=9)
-ax2.set_xlabel('# of Iterations')
+ax3.plot(final_data['Iterations'], final_data['Flat Metrics'], color='blue', label='Flat Diff')
+ax3.legend(loc=1, fontsize=9)
+ax3.set_xlabel('# of Iterations')
 fig.tight_layout()
 plt.savefig(data_dir+'Plots/MIDRUN_Metrics_Evolution.png',
             bbox_inches='tight', facecolor='white')

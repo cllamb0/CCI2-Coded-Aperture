@@ -175,6 +175,7 @@ class OptimizerClass:
                     self.VisualizeTetrisMask(self.init_mask, 'Initial', label=self.label_blocks)
                     if self.bw_tetris:
                         self.VisualizeMask(self.init_mask, 'Initial')
+                    np.save(self.data_dir+'Initial_block_assigns.npy', self.block_assigns)
                     # self.VisualizeTetrisMask(self.init_mask, 'Initial_labelled', True)
             else:
                 self.CreateMask(save=False)
@@ -818,7 +819,7 @@ class OptimizerClass:
             np.save(self.data_dir+'data_{}-{}.npy'.format(self.save_ev*saves, itr), data)
 
             if self.tetrisify:
-                np.save(self.data_dir+'final_block_assigns.npy', self.min_block_assigns)
+                np.save(self.data_dir+'Final_block_assigns.npy', self.min_block_assigns)
 
             final_data, files_list = {}, []
             for f in os.listdir(self.data_dir):
