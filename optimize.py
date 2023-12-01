@@ -51,7 +51,8 @@ class OptimizerClass:
                  total_blocks  = total_blocks,
                  block_colors  = block_colors,
                  static_blocks = False,
-                 label_blocks  = False):
+                 label_blocks  = False,
+                 bw_tetris     = False):
         """
         Initializer for all class variables and intial
         """
@@ -98,6 +99,7 @@ class OptimizerClass:
         self.blokus_needed  = 0
         self.static_blocks  = static_blocks
         self.label_blocks   = label_blocks
+        self.bw_tetris      = bw_tetris
 
         if not self.tetrisify:
             self.frac_tetris = 0
@@ -171,6 +173,8 @@ class OptimizerClass:
                     self.VisualizeMask(self.init_mask, 'Initial')
                 else:
                     self.VisualizeTetrisMask(self.init_mask, 'Initial', label=self.label_blocks)
+                    if self.bw_tetris:
+                        self.VisualizeMask(self.init_mask, 'Initial')
                     # self.VisualizeTetrisMask(self.init_mask, 'Initial_labelled', True)
             else:
                 self.CreateMask(save=False)
@@ -928,6 +932,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '--label_blocks', action='store_true', default=False,
         help=('Whether to add block type numbering to tetris block plots'))
+    parser.add_argument(
+        '--bw_tetris', action='store_true', default=False,
+        help=('Whether to plot the tetris mask in black/white also'))
 
 
     args = parser.parse_args()
