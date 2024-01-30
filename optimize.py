@@ -382,7 +382,7 @@ class OptimizerClass:
         block_quan = {b:list(_block_assigns.values()).count(b) for b in range(1,len(self.total_blocks)+1)}
 
         # Summing mirror blocks
-        block_mirrors = ([5, 7], [12, 13], [14, 15], [16, 17], [19, 20], [22, 23], [24, 25])
+        block_mirrors = ([2, 3], [5, 7], [12, 13], [14, 15], [16, 17], [19, 20], [22, 23], [24, 25])
         for bm in block_mirrors:
             block_quan[bm[0]] += block_quan[bm[1]]
 
