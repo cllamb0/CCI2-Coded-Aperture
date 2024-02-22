@@ -19,16 +19,16 @@ from tetris_blocks import tetris_blocks, blokus_blocks, total_blocks, block_colo
 class OptimizerClass:
     def __init__(self,
                  method        = 'GreatDeluge',
-                 stopItr       = 150,
+                 stopItr       = 500,
                  data_fname    = None,
                  data_dir      = None,
                  plots_dir     = None,
                  decay_rate    = 0.01,
                  cont          = False,
                  seed          = int(time.time()),
-                 save_ev       = 1000,
+                 save_ev       = 2500,
                  mask_size     = 46,
-                 detector_size = 37,
+                 detector_size = 32,
                  magnification = 4,
                  open_frac     = 0.5,
                  hole_limit    = 80,
@@ -41,7 +41,7 @@ class OptimizerClass:
                  transmission  = 0.05,
                  corr_weight   = 1,
                  sens_weight   = 1,
-                 flat_weight   = 1,
+                 flat_weight   = 2,
                  dual_corr     = False,
                  initialize    = True,
                  tetrisify     = True,
@@ -868,73 +868,73 @@ if __name__ == '__main__':
         '--method', '-m', type=str, default='GreatDeluge',
         help=('Name of optimization method to use, either "GreatDeluge" or "JustRun"'))
     parser.add_argument(
-        '--stopItr', type=int, default=200,
+        '--stopItr', type=int,
         help=('Number of iterations to run or run without improvement'))
     parser.add_argument(
-        '--save_ev', type=int, default=2500,
+        '--save_ev', type=int,
         help=('Save a progress file every X iterations'))
     parser.add_argument(
-        '--decay_rate', type=float, default=0.025,
+        '--decay_rate', type=float,
         help=('Modifier to the rate at which the water level decays in GD'))
     parser.add_argument(
-        '--seed', '-s', type=int, default=int(time.time()),
+        '--seed', '-s', type=int,
         help=('Randomization seed'))
     parser.add_argument(
-        '--mask_size', type=int, default=46,
+        '--mask_size', type=int,
         help=('Size of coded aperture mask on one side of the square mask'))
     parser.add_argument(
-        '--detector_size', type=int, default=37,
+        '--detector_size', type=int,
         help=('Number of detector strips on each detector'))
     parser.add_argument(
-        '--open_frac', type=float, default=0.5,
+        '--open_frac', type=float,
         help=('The fraction of elements without masking elements'))
     parser.add_argument(
-        '--verbose', '-v', action='store_true', default=False,
+        '--verbose', '-v', action='store_true',
         help=('Prints all print outs if called'))
     parser.add_argument(
-        '--magnification', type=float, default=4,
+        '--magnification', type=float,
         help=('Mask magnification'))
     parser.add_argument(
-        '--hole_limit', type=int, default=80,
+        '--hole_limit', type=int,
         help=('Hole size limit'))
     parser.add_argument(
-        '--balanced', '-b', action='store_false', default=True,
+        '--balanced', '-b', action='store_false',
         help=('Whether to implement hole limitations'))
     parser.add_argument(
-        '--sectioning', action='store_false', default=True,
+        '--sectioning', action='store_false',
         help=('Whether to implement mask sectioning'))
     parser.add_argument(
-        '--section_offset', type=int, default=0,
+        '--section_offset', type=int,
         help=('Size of the section offset from magnified detector plane size'))
     parser.add_argument(
-        '--transmission', type=float, default=0.05,
+        '--transmission', type=float,
         help=('Transmission probability of mask elements'))
     parser.add_argument(
-        '--corr_weight', type=float, default=1,
+        '--corr_weight', type=float,
         help=('Weighting factor for cross correlation in metric'))
     parser.add_argument(
-        '--sens_weight', type=float, default=1,
+        '--sens_weight', type=float,
         help=('Weighting factor for sensitivity in metric'))
     parser.add_argument(
-        '--flat_weight', type=float, default=1,
+        '--flat_weight', type=float,
         help=('Weighting factor for mean diff metric'))
     parser.add_argument(
-        '--dual_corr', action='store_true', default=False,
+        '--dual_corr', action='store_true',
         help=('Dual optimizes for magnification 2 and 4'))
     parser.add_argument(
-        '--tetrisify', action='store_false', default=True,
+        '--tetrisify', action='store_false',
         help=('Whether to make mask out of tetris-like pieces or not'))
     parser.add_argument(
-        '--frac_tetris', type=float, default=0.5,
+        '--frac_tetris', type=float,
         help=('Fraction of tetrisified mask made out of 4 element blocks'))
     parser.add_argument(
-        '--static_blocks', action='store_true', default=False,
+        '--static_blocks', action='store_true',
         help=('Whether to use the same list of blocks in tetrisifying'))
     parser.add_argument(
-        '--label_blocks', action='store_true', default=False,
+        '--label_blocks', action='store_true',
         help=('Whether to add block type numbering to tetris block plots'))
     parser.add_argument(
-        '--bw_tetris', action='store_true', default=False,
+        '--bw_tetris', action='store_true',
         help=('Whether to plot the tetris mask in black/white also'))
 
 
