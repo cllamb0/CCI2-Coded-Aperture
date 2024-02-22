@@ -117,23 +117,26 @@ class OptimizerClass:
                     ft = self.frac_tetris
                 data_dir = 'Optimizations/GD_ms_{}-of_{}-mag_{}-seed_{}-hl_{}-cw_{}-sw_{}-ft_{}/'.format(
                             self.mask_size, str(self.open_frac).split('.')[1], self.magnification, self.seed, self.hole_limit, self.corr_weight, self.sens_weight, ft)
-                try:
-                    os.mkdir(data_dir)
-                    if self.verbose:
-                        print('Data directory created')
-                except:
-                    pass
-                self.data_dir = data_dir
+            else:
+                data_dir = 'Optimizations/' + data_dir + '/'
+
+            try:
+                os.mkdir(data_dir)
+                if self.verbose:
+                    print('Data directory created')
+            except:
+                pass
+            self.data_dir = data_dir
 
             if plots_dir is None:
                 plots_dir = data_dir+'Plots/'
-                try:
-                    os.mkdir(plots_dir)
-                    if self.verbose:
-                        print('Plots directory created')
-                except:
-                    pass
-                self.plots_dir = plots_dir
+            try:
+                os.mkdir(plots_dir)
+                if self.verbose:
+                    print('Plots directory created')
+            except:
+                pass
+            self.plots_dir = plots_dir
 
             self.cont = len([f for f in os.listdir(self.data_dir) if f.startswith('INCOMPLETE')]) != 0
         else:
@@ -868,73 +871,76 @@ if __name__ == '__main__':
         '--method', '-m', type=str, default='GreatDeluge',
         help=('Name of optimization method to use, either "GreatDeluge" or "JustRun"'))
     parser.add_argument(
-        '--stopItr', type=int,
+        '--stopItr', type=int, default=500,
         help=('Number of iterations to run or run without improvement'))
     parser.add_argument(
-        '--save_ev', type=int,
+        '--data_dir', type=str, default=None,
+        help=('Name of directory of where to save data'))
+    parser.add_argument(
+        '--save_ev', type=int, default=2500,
         help=('Save a progress file every X iterations'))
     parser.add_argument(
-        '--decay_rate', type=float,
+        '--decay_rate', type=float, default=0.01,
         help=('Modifier to the rate at which the water level decays in GD'))
     parser.add_argument(
-        '--seed', '-s', type=int,
+        '--seed', '-s', type=int, default=int(time.time()),
         help=('Randomization seed'))
     parser.add_argument(
-        '--mask_size', type=int,
+        '--mask_size', type=int, default=46,
         help=('Size of coded aperture mask on one side of the square mask'))
     parser.add_argument(
-        '--detector_size', type=int,
+        '--detector_size', type=int, default=32,
         help=('Number of detector strips on each detector'))
     parser.add_argument(
-        '--open_frac', type=float,
+        '--open_frac', type=float, default=0.5,
         help=('The fraction of elements without masking elements'))
     parser.add_argument(
-        '--verbose', '-v', action='store_true',
+        '--verbose', '-v', action='store_true', default=False,
         help=('Prints all print outs if called'))
     parser.add_argument(
-        '--magnification', type=float,
+        '--magnification', type=float, default=4,
         help=('Mask magnification'))
     parser.add_argument(
-        '--hole_limit', type=int,
+        '--hole_limit', type=int, default=80,
         help=('Hole size limit'))
     parser.add_argument(
-        '--balanced', '-b', action='store_false',
+        '--balanced', '-b', action='store_false', default=True,
         help=('Whether to implement hole limitations'))
     parser.add_argument(
-        '--sectioning', action='store_false',
+        '--sectioning', action='store_false', default=True,
         help=('Whether to implement mask sectioning'))
     parser.add_argument(
-        '--section_offset', type=int,
+        '--section_offset', type=int, default=0,
         help=('Size of the section offset from magnified detector plane size'))
     parser.add_argument(
-        '--transmission', type=float,
+        '--transmission', type=float, default=0.05,
         help=('Transmission probability of mask elements'))
     parser.add_argument(
-        '--corr_weight', type=float,
+        '--corr_weight', type=float, default=1,
         help=('Weighting factor for cross correlation in metric'))
     parser.add_argument(
-        '--sens_weight', type=float,
+        '--sens_weight', type=float, default=1,
         help=('Weighting factor for sensitivity in metric'))
     parser.add_argument(
-        '--flat_weight', type=float,
+        '--flat_weight', type=float, default=2,
         help=('Weighting factor for mean diff metric'))
     parser.add_argument(
-        '--dual_corr', action='store_true',
+        '--dual_corr', action='store_true', default=False,
         help=('Dual optimizes for magnification 2 and 4'))
     parser.add_argument(
-        '--tetrisify', action='store_false',
+        '--tetrisify', action='store_false', default=True,
         help=('Whether to make mask out of tetris-like pieces or not'))
     parser.add_argument(
-        '--frac_tetris', type=float,
+        '--frac_tetris', type=float, default=0.5,
         help=('Fraction of tetrisified mask made out of 4 element blocks'))
     parser.add_argument(
-        '--static_blocks', action='store_true',
+        '--static_blocks', action='store_true', default=False,
         help=('Whether to use the same list of blocks in tetrisifying'))
     parser.add_argument(
-        '--label_blocks', action='store_true',
+        '--label_blocks', action='store_true', default=False,
         help=('Whether to add block type numbering to tetris block plots'))
     parser.add_argument(
-        '--bw_tetris', action='store_true',
+        '--bw_tetris', action='store_true', default=False,
         help=('Whether to plot the tetris mask in black/white also'))
 
 
