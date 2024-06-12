@@ -2,6 +2,7 @@ import numpy as np
 import time
 from tqdm import tqdm
 import math
+import os
 
 # ALL UNITS IN mm
 
@@ -32,7 +33,15 @@ mu = (mu_rho * rho)/10 # [1/mm]
 ################################################################################
 
 start_time = time.time()
-CA_mask = np.loadtxt('Optimizations-Desktop-Tetris/Optimizations-Tetris-300/GD_ms_46-of_3-mag_4-seed_44-hl_80-cw_1.0-sw_2.0-ft_0.4/final_mask.txt')
+data_dir = 'Optimizations-Desktop-Tetris/Optimizations-Tetris-300/'
+try:
+    os.mkdir(data_dir+'Response-Matrix/')
+except:
+    pass
+save_dir = data_dir + 'Response-Matrix/'
+
+mask_dir = 'GD_ms_46-of_3-mag_4-seed_44-hl_80-cw_1.0-sw_2.0-ft_0.4/'
+CA_mask = np.loadtxt(data_dir+mask_dir+'final_mask.txt')
 CA_mask = np.where(CA_mask == 0, 0, 1)
 
 det_start = ((CA_mask.shape[0] - det_size) / 2) * mask_pix_size + (det_pix_size / 2)
@@ -72,8 +81,13 @@ for m, Vj in tqdm(enumerate(voxels), total=voxels.shape[0], desc='Iterating voxe
 
         atten_frac = np.exp(-mu*L)
 
-        response[m,n] = atten_frac
+        # Angle between Sij and normal vector to detector face
+        theta = np.arccos(np.clip(np.dot(Sij/np.linalg.norm(Sij), np.array[0,0,1]), -1.0, 1.0))
+
+        solidAngle = ((det_pix_size**2)*math.cos(theta))/(4*math.pi*(np.linalg.norm(Sij)**2)+2*(det_pix_size**2)*math.cos(theta))
+
+        response[m,n] = solidAngle * atten_frac
     # print(atten_frac)
-np.save('test_attenuation_length.npy', response)
+np.save(save_dir+'response_matrix-seed-{}.npy'.format(mask_dir.split('seed')[1].split('-')[0].strip('_')), response)
 total_time = time.time()-start_time
 print('Iterating took a total of: {} minutes and {} seconds'.format(total_time//60, round(total_time%60, 2)))
