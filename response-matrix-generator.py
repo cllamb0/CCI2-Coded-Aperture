@@ -33,7 +33,7 @@ mu = (mu_rho * rho)/10 # [1/mm]
 ################################################################################
 
 start_time = time.time()
-data_dir = 'Optimizations-Desktop-Tetris/Optimizations-Tetris-300/'
+data_dir = 'Optimizations-Desktop-Tetris/Optimizations-Tetris-Final/'
 try:
     os.mkdir(data_dir+'Response-Matrix/')
 except:
@@ -82,7 +82,7 @@ for m, Vj in tqdm(enumerate(voxels), total=voxels.shape[0], desc='Iterating voxe
         atten_frac = np.exp(-mu*L)
 
         # Angle between Sij and normal vector to detector face
-        theta = np.arccos(np.clip(np.dot(Sij/np.linalg.norm(Sij), np.array[0,0,1]), -1.0, 1.0))
+        theta = np.arccos(np.clip(np.dot(Sij/np.linalg.norm(Sij), np.array([0,0,1])), -1.0, 1.0))
 
         solidAngle = ((det_pix_size**2)*math.cos(theta))/(4*math.pi*(np.linalg.norm(Sij)**2)+2*(det_pix_size**2)*math.cos(theta))
 
