@@ -86,7 +86,7 @@ for m, Vj in tqdm(enumerate(voxels), total=voxels.shape[0], desc='Iterating voxe
 
         solidAngle = ((det_pix_size**2)*math.cos(theta))/(4*math.pi*(np.linalg.norm(Sij)**2)+2*(det_pix_size**2)*math.cos(theta))
 
-        response[m,n] = solidAngle * atten_frac
+        response[m,n] = -solidAngle * atten_frac
     # print(atten_frac)
 np.save(save_dir+'response_matrix-seed-{}.npy'.format(mask_dir.split('seed')[1].split('-')[0].strip('_')), response)
 total_time = time.time()-start_time
