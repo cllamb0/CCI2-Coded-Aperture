@@ -48,7 +48,7 @@ det_start = ((CA_mask.shape[0] - det_size) / 2) * mask_pix_size + (det_pix_size 
 
 # detector_pixels = np.array([[det_start+(m*det_pix_size), det_start+(n*det_pix_size), (b-mask_thickness)] for m in range(det_size) for n in range(det_size)])
 det_x, det_y = np.mgrid[det_start:det_start+(det_size*det_pix_size):det_pix_size, det_start:det_start+(det_size*det_pix_size):det_pix_size]
-detector_pixels = np.hstack((np.array([det_x.flatten(), det_y.flatten()]).T, (np.ones(det_x.flatten().size)*(-(b-mask_thickness))).reshape(-1,1)))
+detector_pixels = np.hstack((np.array([det_x.flatten(), det_y.flatten()]).T, (np.ones(det_x.flatten().size)*((b-mask_thickness))).reshape(-1,1)))
 
 vox_start = -(100-(CA_mask.shape[0]*mask_pix_size))/2 + (voxel_size / 2) # 100 from 10cm extension @ m = 4 and b = 7cm
 vox_x, vox_y, vox_z = np.mgrid[vox_start:100+vox_start:voxel_size, vox_start:100+vox_start:voxel_size, -(b+z_depth+(voxel_size/2))+voxel_size:-(b+(voxel_size/2))+voxel_size:voxel_size]
